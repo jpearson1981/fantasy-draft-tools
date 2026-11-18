@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: league-hub
+    runtime: docker
+    rootDir: league-hub
+    branch: app-v2
+    healthCheckPath: /healthz
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_PATH
+        value: /data/league_hub.db
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PUBLIC_BASE_URL
+        sync: false      # e.g. https://league-hub.onrender.com
+      - key: YAHOO_CLIENT_ID
+        sync: false
+      - key: YAHOO_CLIENT_SECRET
+        sync: false

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>League Hub</title>
+<style>
+  :root { --bg:#0d0f14; --panel:#161a22; --line:#232937; --text:#e6e9ef; --muted:#8b95a7; --accent:#7c5cff; --ok:#2f9e6e; --bad:#e5484d; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  main { max-width:900px; margin:0 auto; padding:24px 16px 64px; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:20px; }
+  h1 { font-size:22px; margin:0; } h2 { font-size:17px; margin:28px 0 10px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:10px; }
+  .row { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .muted { color:var(--muted); font-size:13px; }
+  button, .btn { background:var(--accent); color:#fff; border:0; border-radius:7px; padding:8px 14px; font:inherit; cursor:pointer; text-decoration:none; display:inline-block; }
+  button.secondary { background:transparent; border:1px solid var(--line); color:var(--text); }
+  button.danger { background:transparent; border:1px solid var(--bad); color:var(--bad); }
+  button:disabled { opacity:.5; cursor:default; }
+  table { width:100%; border-collapse:collapse; margin-top:8px; font-size:14px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:500; }
+  .tag { font-size:12px; border:1px solid var(--line); border-radius:999px; padding:1px 8px; color:var(--muted); margin-right:4px; }
+  .tag.mine { border-color:var(--ok); color:var(--ok); }
+  #msg { min-height:22px; margin-bottom:8px; } #msg.err { color:var(--bad); }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>League Hub</h1>
+    <div id="auth"></div>
+  </header>
+  <div id="msg" role="status"></div>
+
+  <section id="signedOut" class="panel hidden">
+    <p>Log in with Yahoo to bring in your fantasy leagues. League Hub only asks for read access and never sees your Yahoo password.</p>
+    <a class="btn" href="/auth/yahoo/login">Log in with Yahoo</a>
+  </section>
+
+  <section id="signedIn" class="hidden">
+    <h2>Saved leagues</h2>
+    <div id="saved"></div>
+    <h2>Yahoo leagues you can add</h2>
+    <div id="yahoo"></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+function el(tag, props, ...kids) {
+  const n = document.createElement(tag);
+  Object.entries(props || {}).forEach(([k, v]) => {
+    if (k === "class") n.className = v; else if (k.startsWith("on")) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
+  });
+  kids.flat().forEach((k) => n.append(k instanceof Node ? k : document.createTextNode(String(k))));
+  return n;   // league and team names come from Yahoo: only ever inserted as text
+}
+function say(text, isErr) { const m = $("msg"); m.textContent = text || ""; m.className = isErr ? "err" : ""; }
+async function api(path, opts) {
+  const r = await fetch(path, { credentials: "same-origin", headers: { "Content-Type": "application/json" }, ...opts });
+  const body = await r.json().catch(() => ({}));
+  if (r.status === 401 && body.error === "yahoo_reauth_required") { show(false); throw new Error("Your Yahoo login expired. Please log in again."); }
+  if (!r.ok) throw new Error(body.message || body.error || ("Request failed (" + r.status + ")"));
+  return body;
+}
+function show(loggedIn) {
+  $("signedOut").classList.toggle("hidden", loggedIn);
+  $("signedIn").classList.toggle("hidden", !loggedIn);
+  $("auth").replaceChildren(loggedIn ? el("button", { class: "secondary", onclick: logout }, "Log out") : "");
+}
+async function logout() { await api("/auth/logout", { method: "POST" }); show(false); say(""); }
+
+function leagueDetails(l) {
+  const slots = Object.entries(l.roster || {}).map(([p, c]) => p + " " + c).join(", ");
+  const rows = (l.teams || []).map((t) => el("tr", {}, el("td", {}, t.name || "(unnamed)", t.is_mine ? el("span", { class: "tag mine" }, "you") : ""), el("td", {}, t.owner || "unknown")));
+  return el("div", {},
+    el("div", { class: "muted" }, "Roster: " + slots + " (" + (l.roster_spots ?? "?") + " drafted spots)"),
+    el("table", {}, el("tr", {}, el("th", {}, "Team"), el("th", {}, "Owner")), rows));
+}
+async function renderSaved() {
+  const { leagues } = await api("/api/leagues");
+  const box = $("saved");
+  if (!leagues.length) { box.replaceChildren(el("div", { class: "muted" }, "No leagues saved yet. Add one below.")); return; }
+  box.replaceChildren(...leagues.map((l) => {
+    const detail = el("div", { class: "hidden" });
+    const toggle = el("button", { class: "secondary", onclick: async () => {
+      if (detail.dataset.loaded !== "1") { detail.replaceChildren(leagueDetails(await api("/api/leagues/" + l.id))); detail.dataset.loaded = "1"; }
+      detail.classList.toggle("hidden");
+    } }, "Details");
+    const remove = el("button", { class: "danger", onclick: async () => {
+      if (!confirm("Remove " + l.name + " " + l.season + " from League Hub?")) return;
+      await api("/api/leagues/" + l.id, { method: "DELETE" }); await refresh();
+    } }, "Remove");
+    return el("div", { class: "panel" },
+      el("div", { class: "row" },
+        el("div", {}, el("strong", {}, l.name), " ", el("span", { class: "muted" }, l.season),
+          el("div", {}, el("span", { class: "tag" }, "Yahoo"), el("span", { class: "tag" }, l.num_teams + " teams"),
+            el("span", { class: "tag" }, l.draft_type), el("span", { class: "tag" }, l.draft_mode + " draft"),
+            l.keeper_enabled ? el("span", { class: "tag" }, "keeper") : "")),
+        el("div", {}, toggle, " ", remove)),
+      detail);
+  }));
+}
+async function renderYahoo() {
+  const box = $("yahoo");
+  box.replaceChildren(el("div", { class: "muted" }, "Loading from Yahoo..."));
+  const { leagues } = await api("/api/yahoo/leagues");
+  if (!leagues.length) { box.replaceChildren(el("div", { class: "muted" }, "No NFL leagues found on this Yahoo account.")); return; }
+  box.replaceChildren(...leagues.map((l) => {
+    const btn = el("button", { onclick: async () => {
+      btn.disabled = true; btn.textContent = "Importing...";
+      try { await api("/api/leagues", { method: "POST", body: JSON.stringify({ league_key: l.league_key }) }); say("Saved " + l.name + " " + l.season + "."); await refresh(); }
+      catch (e) { say(e.message, true); btn.disabled = false; btn.textContent = l.saved ? "Re-import" : "Save league"; }
+    } }, l.saved ? "Re-import" : "Save league");
+    return el("div", { class: "panel row" },
+      el("div", {}, el("strong", {}, l.name), " ", el("span", { class: "muted" }, l.season + " - " + (l.num_teams ?? "?") + " teams")), btn);
+  }));
+}
+async function refresh() { await renderSaved(); await renderYahoo(); }
+(async function init() {
+  const q = new URLSearchParams(location.search);
+  if (q.get("error") === "yahoo_denied") say("Yahoo access was not granted. Log in again and choose Agree.", true);
+  try {
+    const me = await api("/api/me");
+    show(me.logged_in);
+    if (me.logged_in) await refresh();
+  } catch (e) { say(e.message, true); }
+})();
+</script>
+</body>
+</html>
