@@ -1,0 +1,3273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dynasty Draft Tool</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #0d0f14; min-height: 100vh; }
+  #root { min-height: 100vh; }
+</style>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<meta name="theme-color" content="#0d0f14" />
+<link rel="manifest" href="dynasty.webmanifest" />
+<link rel="apple-touch-icon" href="icons/dynasty-180.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Dynasty" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("sw.js").catch(function () {});
+  });
+}
+</script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+/* ---------------------------------------------------------
+   STATIC DATA — Dynasty league, precomputed from the workbook's
+   Rankings_Engine / Scarcity_Engine / Auction_Values formula chain.
+   n=name p=position pt=projected points v=VBD t=tier
+   a=projected auction value m=max bid sc=scarcity-adjusted VBD
+---------------------------------------------------------- */
+const RAW_PLAYERS = [{"n":"Josh Allen BUF","p":"QB","pt":489.13,"v":161.4,"t":"Tier 1","a":57,"m":63,"sc":3435.0},{"n":"Drake Maye NE","p":"QB","pt":444.28,"v":116.5,"t":"Tier 2","a":41,"m":45,"sc":2480.3},{"n":"Lamar Jackson BAL","p":"QB","pt":423.19,"v":95.4,"t":"Tier 3","a":34,"m":37,"sc":2031.4},{"n":"Jayden Daniels WAS","p":"QB","pt":437.56,"v":109.8,"t":"Tier 2","a":39,"m":43,"sc":2337.3},{"n":"Jalen Hurts PHI","p":"QB","pt":441.24,"v":113.5,"t":"Tier 2","a":40,"m":44,"sc":2415.6},{"n":"Jaxson Dart NYG","p":"QB","pt":419.38,"v":91.6,"t":"Tier 3","a":32,"m":35,"sc":1950.3},{"n":"Joe Burrow CIN","p":"QB","pt":432.1,"v":104.3,"t":"Tier 2","a":37,"m":41,"sc":2221.1},{"n":"Brock Purdy SF","p":"QB","pt":421.6,"v":93.8,"t":"Tier 3","a":33,"m":36,"sc":1997.5},{"n":"Dak Prescott DAL","p":"QB","pt":422.59,"v":94.8,"t":"Tier 3","a":33,"m":36,"sc":2018.6},{"n":"Trevor Lawrence JAC","p":"QB","pt":407.66,"v":79.9,"t":"Tier 3","a":28,"m":31,"sc":1700.8},{"n":"Patrick Mahomes II KC","p":"QB","pt":408.26,"v":80.5,"t":"Tier 3","a":28,"m":31,"sc":1713.6},{"n":"Justin Herbert LAC","p":"QB","pt":408.23,"v":80.5,"t":"Tier 3","a":28,"m":31,"sc":1712.9},{"n":"Caleb Williams CHI","p":"QB","pt":402.65,"v":74.9,"t":"Tier 3","a":26,"m":29,"sc":1594.2},{"n":"Bo Nix DEN","p":"QB","pt":415.87,"v":88.1,"t":"Tier 3","a":31,"m":34,"sc":1875.6},{"n":"Matthew Stafford LAR","p":"QB","pt":393.69,"v":65.9,"t":"Tier 3","a":23,"m":25,"sc":1403.4},{"n":"Jared Goff DET","p":"QB","pt":394.38,"v":66.6,"t":"Tier 3","a":23,"m":25,"sc":1418.1},{"n":"Tyler Shough NO","p":"QB","pt":407.39,"v":79.6,"t":"Tier 3","a":28,"m":31,"sc":1695.1},{"n":"Baker Mayfield TB","p":"QB","pt":385.54,"v":57.8,"t":"Tier 4","a":20,"m":22,"sc":1229.9},{"n":"Kyler Murray MIN","p":"QB","pt":384.87,"v":57.1,"t":"Tier 4","a":20,"m":22,"sc":1215.7},{"n":"Daniel Jones IND","p":"QB","pt":384.6,"v":56.8,"t":"Tier 4","a":20,"m":22,"sc":1209.9},{"n":"Malik Willis MIA","p":"QB","pt":390.96,"v":63.2,"t":"Tier 3","a":22,"m":24,"sc":1345.3},{"n":"Jordan Love GB","p":"QB","pt":365.09,"v":37.3,"t":"Tier 4","a":13,"m":14,"sc":794.6},{"n":"Sam Darnold SEA","p":"QB","pt":365.9,"v":38.1,"t":"Tier 4","a":13,"m":14,"sc":811.9},{"n":"C.J. Stroud HOU","p":"QB","pt":367.6,"v":39.8,"t":"Tier 4","a":14,"m":15,"sc":848.1},{"n":"Bryce Young CAR","p":"QB","pt":353.59,"v":25.8,"t":"Tier 5","a":9,"m":10,"sc":549.8},{"n":"Geno Smith NYJ","p":"QB","pt":342.04,"v":14.3,"t":"Tier 5","a":5,"m":6,"sc":304.0},{"n":"Jacoby Brissett ARI","p":"QB","pt":346.97,"v":19.2,"t":"Tier 5","a":7,"m":8,"sc":408.9},{"n":"Cam Ward TEN","p":"QB","pt":346.03,"v":18.3,"t":"Tier 5","a":6,"m":7,"sc":388.9},{"n":"Aaron Rodgers PIT","p":"QB","pt":327.76,"v":0.0,"t":"Tier 5","a":1,"m":1,"sc":0.0},{"n":"Fernando Mendoza LV","p":"QB","pt":279.85,"v":-47.9,"t":"Tier 5","a":1,"m":1,"sc":-1019.8},{"n":"Tua Tagovailoa ATL","p":"QB","pt":238.17,"v":-89.6,"t":"Tier 5","a":1,"m":1,"sc":-1907.1},{"n":"Deshaun Watson CLE","p":"QB","pt":202.08,"v":-125.7,"t":"Tier 5","a":1,"m":1,"sc":-2675.3},{"n":"Shedeur Sanders CLE","p":"QB","pt":150.02,"v":-177.7,"t":"Tier 5","a":1,"m":1,"sc":-3783.5},{"n":"Michael Penix Jr. ATL","p":"QB","pt":118.84,"v":-208.9,"t":"Tier 5","a":1,"m":1,"sc":-4447.2},{"n":"Kirk Cousins LV","p":"QB","pt":68.97,"v":-258.8,"t":"Tier 5","a":1,"m":1,"sc":-5508.8},{"n":"Ty Simpson LAR","p":"QB","pt":30.63,"v":-297.1,"t":"Tier 5","a":1,"m":1,"sc":-6324.9},{"n":"Carson Beck ARI","p":"QB","pt":32.81,"v":-294.9,"t":"Tier 5","a":1,"m":1,"sc":-6278.5},{"n":"J.J. McCarthy MIN","p":"QB","pt":31.8,"v":-296.0,"t":"Tier 5","a":1,"m":1,"sc":-6300.0},{"n":"Anthony Richardson Sr. IND","p":"QB","pt":28.98,"v":-298.8,"t":"Tier 5","a":1,"m":1,"sc":-6360.0},{"n":"Marcus Mariota WAS","p":"QB","pt":23.73,"v":-304.0,"t":"Tier 5","a":1,"m":1,"sc":-6471.8},{"n":"Riley Leonard IND","p":"QB","pt":18.73,"v":-309.0,"t":"Tier 5","a":1,"m":1,"sc":-6578.2},{"n":"Davis Mills HOU","p":"QB","pt":18.0,"v":-309.8,"t":"Tier 5","a":1,"m":1,"sc":-6593.8},{"n":"Joe Milton III DAL","p":"QB","pt":17.07,"v":-310.7,"t":"Tier 5","a":1,"m":1,"sc":-6613.6},{"n":"Justin Fields KC","p":"QB","pt":17.37,"v":-310.4,"t":"Tier 5","a":1,"m":1,"sc":-6607.2},{"n":"Shane Buechele BUF","p":"QB","pt":17.0,"v":-310.8,"t":"Tier 5","a":1,"m":1,"sc":-6615.0},{"n":"Jameis Winston NYG","p":"QB","pt":16.09,"v":-311.7,"t":"Tier 5","a":1,"m":1,"sc":-6634.4},{"n":"Kenny Pickett CAR","p":"QB","pt":15.86,"v":-311.9,"t":"Tier 5","a":1,"m":1,"sc":-6639.3},{"n":"Quinn Ewers MIA","p":"QB","pt":16.44,"v":-311.3,"t":"Tier 5","a":1,"m":1,"sc":-6627.0},{"n":"Tyson Bagent CHI","p":"QB","pt":16.14,"v":-311.6,"t":"Tier 5","a":1,"m":1,"sc":-6633.4},{"n":"Will Levis TEN","p":"QB","pt":16.69,"v":-311.1,"t":"Tier 5","a":1,"m":1,"sc":-6621.6},{"n":"Jake Browning TB","p":"QB","pt":14.83,"v":-312.9,"t":"Tier 5","a":1,"m":1,"sc":-6661.2},{"n":"Jarrett Stidham DEN","p":"QB","pt":16.34,"v":-311.4,"t":"Tier 5","a":1,"m":1,"sc":-6629.1},{"n":"Teddy Bridgewater DET","p":"QB","pt":15.2,"v":-312.6,"t":"Tier 5","a":1,"m":1,"sc":-6653.4},{"n":"Tyrod Taylor GB","p":"QB","pt":14.76,"v":-313.0,"t":"Tier 5","a":1,"m":1,"sc":-6662.7},{"n":"Tommy DeVito NE","p":"QB","pt":15.52,"v":-312.2,"t":"Tier 5","a":1,"m":1,"sc":-6646.5},{"n":"Tyler Huntley BAL","p":"QB","pt":14.2,"v":-313.6,"t":"Tier 5","a":1,"m":1,"sc":-6674.6},{"n":"Mac Jones SF","p":"QB","pt":15.42,"v":-312.3,"t":"Tier 5","a":1,"m":1,"sc":-6648.7},{"n":"Trey Lance LAC","p":"QB","pt":14.43,"v":-313.3,"t":"Tier 5","a":1,"m":1,"sc":-6669.8},{"n":"Tanner McKee PHI","p":"QB","pt":14.81,"v":-312.9,"t":"Tier 5","a":1,"m":1,"sc":-6661.7},{"n":"Joe Flacco CIN","p":"QB","pt":16.16,"v":-311.6,"t":"Tier 5","a":1,"m":1,"sc":-6632.9},{"n":"Mason Rudolph PIT","p":"QB","pt":14.8,"v":-313.0,"t":"Tier 5","a":1,"m":1,"sc":-6661.9},{"n":"Spencer Rattler NO","p":"QB","pt":14.59,"v":-313.2,"t":"Tier 5","a":1,"m":1,"sc":-6666.3},{"n":"Drew Lock SEA","p":"QB","pt":13.64,"v":-314.1,"t":"Tier 5","a":1,"m":1,"sc":-6686.6},{"n":"Andy Dalton PHI","p":"QB","pt":16.95,"v":-310.8,"t":"Tier 5","a":1,"m":1,"sc":-6616.1},{"n":"Behren Morton NE","p":"QB","pt":12.92,"v":-314.8,"t":"Tier 5","a":1,"m":1,"sc":-6701.9},{"n":"Nick Mullens JAC","p":"QB","pt":14.74,"v":-313.0,"t":"Tier 5","a":1,"m":1,"sc":-6663.2},{"n":"Chris Oladokun KC","p":"QB","pt":16.86,"v":-310.9,"t":"Tier 5","a":1,"m":1,"sc":-6618.0},{"n":"Gardner Minshew II ARI","p":"QB","pt":14.37,"v":-313.4,"t":"Tier 5","a":1,"m":1,"sc":-6671.0},{"n":"Cade Klubnik NYJ","p":"QB","pt":12.8,"v":-315.0,"t":"Tier 5","a":1,"m":1,"sc":-6704.4},{"n":"Adrian Martinez SF","p":"QB","pt":13.63,"v":-314.1,"t":"Tier 5","a":1,"m":1,"sc":-6686.8},{"n":"Garrett Nussmeier KC","p":"QB","pt":13.12,"v":-314.6,"t":"Tier 5","a":1,"m":1,"sc":-6697.6},{"n":"Cole Payton PHI","p":"QB","pt":12.1,"v":-315.7,"t":"Tier 5","a":1,"m":1,"sc":-6719.3},{"n":"Kyle Allen BUF","p":"QB","pt":12.95,"v":-314.8,"t":"Tier 5","a":1,"m":1,"sc":-6701.3},{"n":"Mitchell Trubisky TEN","p":"QB","pt":13.45,"v":-314.3,"t":"Tier 5","a":1,"m":1,"sc":-6690.6},{"n":"Jalen Milroe SEA","p":"QB","pt":12.5,"v":-315.3,"t":"Tier 5","a":1,"m":1,"sc":-6710.8},{"n":"Drew Allar PIT","p":"QB","pt":12.42,"v":-315.3,"t":"Tier 5","a":1,"m":1,"sc":-6712.5},{"n":"Will Howard PIT","p":"QB","pt":9.36,"v":-318.4,"t":"Tier 5","a":1,"m":1,"sc":-6777.7},{"n":"Brady Cook NYJ","p":"QB","pt":6.98,"v":-320.8,"t":"Tier 5","a":1,"m":1,"sc":-6828.3},{"n":"Josh Johnson CIN","p":"QB","pt":0.0,"v":-327.8,"t":"Tier 5","a":1,"m":1,"sc":-6976.9},{"n":"Stetson Bennett IV LAR","p":"QB","pt":0.0,"v":-327.8,"t":"Tier 5","a":1,"m":1,"sc":-6976.9},{"n":"Aidan O'Connell LV","p":"QB","pt":0.0,"v":-327.8,"t":"Tier 5","a":1,"m":1,"sc":-6976.9},{"n":"Jahmyr Gibbs DET","p":"RB","pt":413.53,"v":165.3,"t":"Tier 1","a":58,"m":64,"sc":3239.9},{"n":"Bijan Robinson ATL","p":"RB","pt":410.52,"v":162.3,"t":"Tier 1","a":57,"m":63,"sc":3180.9},{"n":"Jonathan Taylor IND","p":"RB","pt":385.12,"v":136.9,"t":"Tier 2","a":48,"m":53,"sc":2683.2},{"n":"Christian McCaffrey SF","p":"RB","pt":383.19,"v":135.0,"t":"Tier 2","a":48,"m":53,"sc":2645.3},{"n":"Derrick Henry BAL","p":"RB","pt":346.41,"v":98.2,"t":"Tier 3","a":35,"m":38,"sc":1924.6},{"n":"James Cook III BUF","p":"RB","pt":334.41,"v":86.2,"t":"Tier 3","a":30,"m":33,"sc":1689.4},{"n":"De'Von Achane MIA","p":"RB","pt":328.65,"v":80.5,"t":"Tier 3","a":28,"m":31,"sc":1576.5},{"n":"Saquon Barkley PHI","p":"RB","pt":333.45,"v":85.2,"t":"Tier 3","a":30,"m":33,"sc":1670.6},{"n":"Josh Jacobs GB","p":"RB","pt":331.47,"v":83.3,"t":"Tier 3","a":29,"m":32,"sc":1631.8},{"n":"Ashton Jeanty LV","p":"RB","pt":343.18,"v":95.0,"t":"Tier 3","a":33,"m":36,"sc":1861.3},{"n":"Chase Brown CIN","p":"RB","pt":326.0,"v":77.8,"t":"Tier 3","a":27,"m":30,"sc":1524.6},{"n":"Omarion Hampton LAC","p":"RB","pt":319.43,"v":71.2,"t":"Tier 3","a":25,"m":28,"sc":1395.9},{"n":"Kyren Williams LAR","p":"RB","pt":295.29,"v":47.1,"t":"Tier 4","a":17,"m":19,"sc":922.8},{"n":"Breece Hall NYJ","p":"RB","pt":307.8,"v":59.6,"t":"Tier 4","a":21,"m":23,"sc":1168.0},{"n":"Kenneth Walker III KC","p":"RB","pt":305.22,"v":57.0,"t":"Tier 4","a":20,"m":22,"sc":1117.4},{"n":"Javonte Williams DAL","p":"RB","pt":299.33,"v":51.1,"t":"Tier 4","a":18,"m":20,"sc":1002.0},{"n":"Jeremiyah Love ARI","p":"RB","pt":304.26,"v":56.1,"t":"Tier 4","a":20,"m":22,"sc":1098.6},{"n":"Cam Skattebo NYG","p":"RB","pt":300.08,"v":51.9,"t":"Tier 4","a":18,"m":20,"sc":1016.7},{"n":"Travis Etienne Jr. NO","p":"RB","pt":291.81,"v":43.6,"t":"Tier 4","a":15,"m":16,"sc":854.6},{"n":"D'Andre Swift CHI","p":"RB","pt":272.98,"v":24.8,"t":"Tier 5","a":9,"m":10,"sc":485.6},{"n":"Bucky Irving TB","p":"RB","pt":290.05,"v":41.9,"t":"Tier 4","a":15,"m":16,"sc":820.1},{"n":"Quinshon Judkins CLE","p":"RB","pt":294.33,"v":46.1,"t":"Tier 4","a":16,"m":18,"sc":904.0},{"n":"Bhayshul Tuten JAC","p":"RB","pt":273.21,"v":25.0,"t":"Tier 5","a":9,"m":10,"sc":490.1},{"n":"TreVeyon Henderson NE","p":"RB","pt":241.12,"v":-7.1,"t":"Tier 5","a":1,"m":1,"sc":-138.7},{"n":"David Montgomery HOU","p":"RB","pt":248.2,"v":0.0,"t":"Tier 5","a":1,"m":1,"sc":0.0},{"n":"Jadarian Price SEA","p":"RB","pt":242.4,"v":-5.8,"t":"Tier 5","a":1,"m":1,"sc":-113.7},{"n":"Tony Pollard TEN","p":"RB","pt":252.35,"v":4.2,"t":"Tier 5","a":1,"m":1,"sc":81.3},{"n":"Rico Dowdle PIT","p":"RB","pt":234.83,"v":-13.4,"t":"Tier 5","a":1,"m":1,"sc":-262.0},{"n":"J.K. Dobbins DEN","p":"RB","pt":225.75,"v":-22.4,"t":"Tier 5","a":1,"m":1,"sc":-439.9},{"n":"Chuba Hubbard CAR","p":"RB","pt":238.96,"v":-9.2,"t":"Tier 5","a":1,"m":1,"sc":-181.1},{"n":"Jaylen Warren PIT","p":"RB","pt":231.1,"v":-17.1,"t":"Tier 5","a":1,"m":1,"sc":-335.1},{"n":"Rhamondre Stevenson NE","p":"RB","pt":221.97,"v":-26.2,"t":"Tier 5","a":1,"m":1,"sc":-514.0},{"n":"Kyle Monangai CHI","p":"RB","pt":202.47,"v":-45.7,"t":"Tier 5","a":1,"m":1,"sc":-896.2},{"n":"Jacory Croskey-Merritt WAS","p":"RB","pt":193.56,"v":-54.6,"t":"Tier 5","a":1,"m":1,"sc":-1070.8},{"n":"RJ Harvey DEN","p":"RB","pt":202.37,"v":-45.8,"t":"Tier 5","a":1,"m":1,"sc":-898.1},{"n":"Rachaad White WAS","p":"RB","pt":195.03,"v":-53.2,"t":"Tier 5","a":1,"m":1,"sc":-1041.9},{"n":"Aaron Jones Sr. MIN","p":"RB","pt":202.06,"v":-46.1,"t":"Tier 5","a":1,"m":1,"sc":-904.2},{"n":"Blake Corum LAR","p":"RB","pt":179.44,"v":-68.8,"t":"Tier 5","a":1,"m":1,"sc":-1347.5},{"n":"Jordan Mason MIN","p":"RB","pt":185.87,"v":-62.3,"t":"Tier 5","a":1,"m":1,"sc":-1221.5},{"n":"Kenny Gainwell TB","p":"RB","pt":181.69,"v":-66.5,"t":"Tier 5","a":1,"m":1,"sc":-1303.4},{"n":"Jonathon Brooks CAR","p":"RB","pt":173.33,"v":-74.9,"t":"Tier 5","a":1,"m":1,"sc":-1467.2},{"n":"Zach Charbonnet SEA","p":"RB","pt":155.61,"v":-92.6,"t":"Tier 5","a":1,"m":1,"sc":-1814.4},{"n":"Woody Marks HOU","p":"RB","pt":159.96,"v":-88.2,"t":"Tier 5","a":1,"m":1,"sc":-1729.2},{"n":"Isiah Pacheco DET","p":"RB","pt":151.16,"v":-97.0,"t":"Tier 5","a":1,"m":1,"sc":-1901.7},{"n":"Tyrone Tracy Jr. NYG","p":"RB","pt":142.94,"v":-105.3,"t":"Tier 5","a":1,"m":1,"sc":-2062.7},{"n":"Tyjae Spears TEN","p":"RB","pt":150.21,"v":-98.0,"t":"Tier 5","a":1,"m":1,"sc":-1920.3},{"n":"Chris Rodriguez Jr. JAC","p":"RB","pt":133.28,"v":-114.9,"t":"Tier 5","a":1,"m":1,"sc":-2252.0},{"n":"Alvin Kamara NO","p":"RB","pt":148.91,"v":-99.3,"t":"Tier 5","a":1,"m":1,"sc":-1945.7},{"n":"Brian Robinson Jr. ATL","p":"RB","pt":128.3,"v":-119.9,"t":"Tier 5","a":1,"m":1,"sc":-2349.6},{"n":"Justice Hill BAL","p":"RB","pt":115.73,"v":-132.5,"t":"Tier 5","a":1,"m":1,"sc":-2596.0},{"n":"Tyler Allgeier ARI","p":"RB","pt":126.08,"v":-122.1,"t":"Tier 5","a":1,"m":1,"sc":-2393.1},{"n":"Braelon Allen NYJ","p":"RB","pt":121.98,"v":-126.2,"t":"Tier 5","a":1,"m":1,"sc":-2473.5},{"n":"AJ Dillon CAR","p":"RB","pt":133.75,"v":-114.5,"t":"Tier 5","a":1,"m":1,"sc":-2242.8},{"n":"Samaje Perine CIN","p":"RB","pt":120.87,"v":-127.3,"t":"Tier 5","a":1,"m":1,"sc":-2495.2},{"n":"Jordan James SF","p":"RB","pt":118.9,"v":-129.3,"t":"Tier 5","a":1,"m":1,"sc":-2533.8},{"n":"Dylan Sampson CLE","p":"RB","pt":119.99,"v":-128.2,"t":"Tier 5","a":1,"m":1,"sc":-2512.5},{"n":"Ty Johnson BUF","p":"RB","pt":98.77,"v":-149.4,"t":"Tier 5","a":1,"m":1,"sc":-2928.3},{"n":"Kaelon Black SF","p":"RB","pt":103.8,"v":-144.4,"t":"Tier 5","a":1,"m":1,"sc":-2829.7},{"n":"Emari Demercado KC","p":"RB","pt":96.94,"v":-151.3,"t":"Tier 5","a":1,"m":1,"sc":-2964.2},{"n":"Tank Bigsby PHI","p":"RB","pt":88.33,"v":-159.9,"t":"Tier 5","a":1,"m":1,"sc":-3132.9},{"n":"Mike Washington Jr. LV","p":"RB","pt":101.5,"v":-146.7,"t":"Tier 5","a":1,"m":1,"sc":-2874.8},{"n":"Keaton Mitchell LAC","p":"RB","pt":90.61,"v":-157.6,"t":"Tier 5","a":1,"m":1,"sc":-3088.2},{"n":"Malik Davis DAL","p":"RB","pt":84.47,"v":-163.7,"t":"Tier 5","a":1,"m":1,"sc":-3208.5},{"n":"Adam Randall BAL","p":"RB","pt":75.69,"v":-172.5,"t":"Tier 5","a":1,"m":1,"sc":-3380.6},{"n":"Chris Brooks GB","p":"RB","pt":82.89,"v":-165.3,"t":"Tier 5","a":1,"m":1,"sc":-3239.5},{"n":"Kimani Vidal LAC","p":"RB","pt":74.57,"v":-173.6,"t":"Tier 5","a":1,"m":1,"sc":-3402.6},{"n":"James Conner ARI","p":"RB","pt":68.55,"v":-179.7,"t":"Tier 5","a":1,"m":1,"sc":-3520.5},{"n":"Emanuel Wilson SEA","p":"RB","pt":69.83,"v":-178.4,"t":"Tier 5","a":1,"m":1,"sc":-3495.4},{"n":"Jaylen Wright MIA","p":"RB","pt":74.77,"v":-173.4,"t":"Tier 5","a":1,"m":1,"sc":-3398.6},{"n":"Jawhar Jordan HOU","p":"RB","pt":61.53,"v":-186.7,"t":"Tier 5","a":1,"m":1,"sc":-3658.1},{"n":"Jaydon Blue DAL","p":"RB","pt":57.9,"v":-190.3,"t":"Tier 5","a":1,"m":1,"sc":-3729.2},{"n":"MarShawn Lloyd GB","p":"RB","pt":55.6,"v":-192.6,"t":"Tier 5","a":1,"m":1,"sc":-3774.3},{"n":"Kendre Miller NO","p":"RB","pt":54.69,"v":-193.5,"t":"Tier 5","a":1,"m":1,"sc":-3792.1},{"n":"George Holani SEA","p":"RB","pt":49.57,"v":-198.6,"t":"Tier 5","a":1,"m":1,"sc":-3892.5},{"n":"Frank Gore Jr. BUF","p":"RB","pt":43.5,"v":-204.7,"t":"Tier 5","a":1,"m":1,"sc":-4011.4},{"n":"Kyle Juszczyk SF","p":"RB","pt":46.49,"v":-201.7,"t":"Tier 5","a":1,"m":1,"sc":-3952.8},{"n":"Roschon Johnson CHI","p":"RB","pt":44.1,"v":-204.1,"t":"Tier 5","a":1,"m":1,"sc":-3999.7},{"n":"Ollie Gordon II MIA","p":"RB","pt":47.93,"v":-200.3,"t":"Tier 5","a":1,"m":1,"sc":-3924.6},{"n":"Sean Tucker TB","p":"RB","pt":41.43,"v":-206.8,"t":"Tier 5","a":1,"m":1,"sc":-4052.0},{"n":"Emmett Johnson KC","p":"RB","pt":44.36,"v":-203.8,"t":"Tier 5","a":1,"m":1,"sc":-3994.6},{"n":"Ray Davis BUF","p":"RB","pt":42.84,"v":-205.4,"t":"Tier 5","a":1,"m":1,"sc":-4024.3},{"n":"Isaiah Davis NYJ","p":"RB","pt":40.36,"v":-207.8,"t":"Tier 5","a":1,"m":1,"sc":-4072.9},{"n":"DJ Giddens IND","p":"RB","pt":43.11,"v":-205.1,"t":"Tier 5","a":1,"m":1,"sc":-4019.1},{"n":"Ty Chandler NO","p":"RB","pt":55.05,"v":-193.2,"t":"Tier 5","a":1,"m":1,"sc":-3785.1},{"n":"Jonah Coleman DEN","p":"RB","pt":38.27,"v":-209.9,"t":"Tier 5","a":1,"m":1,"sc":-4113.9},{"n":"Elijah Mitchell PHI","p":"RB","pt":34.55,"v":-213.7,"t":"Tier 5","a":1,"m":1,"sc":-4186.8},{"n":"Jam Miller NE","p":"RB","pt":34.05,"v":-214.2,"t":"Tier 5","a":1,"m":1,"sc":-4196.6},{"n":"LeQuint Allen Jr. JAC","p":"RB","pt":40.8,"v":-207.4,"t":"Tier 5","a":1,"m":1,"sc":-4064.3},{"n":"Phil Mafah DAL","p":"RB","pt":34.8,"v":-213.4,"t":"Tier 5","a":1,"m":1,"sc":-4181.9},{"n":"Devin Singletary NYG","p":"RB","pt":37.05,"v":-211.2,"t":"Tier 5","a":1,"m":1,"sc":-4137.8},{"n":"Salvon Ahmed CHI","p":"RB","pt":32.7,"v":-215.5,"t":"Tier 5","a":1,"m":1,"sc":-4223.1},{"n":"Jarquez Hunter LAR","p":"RB","pt":31.1,"v":-217.1,"t":"Tier 5","a":1,"m":1,"sc":-4254.4},{"n":"Dameon Pierce PHI","p":"RB","pt":31.55,"v":-216.7,"t":"Tier 5","a":1,"m":1,"sc":-4245.6},{"n":"Israel Abanikanda DAL","p":"RB","pt":31.05,"v":-217.2,"t":"Tier 5","a":1,"m":1,"sc":-4255.4},{"n":"Brashard Smith KC","p":"RB","pt":37.0,"v":-211.2,"t":"Tier 5","a":1,"m":1,"sc":-4138.8},{"n":"Trevor Etienne CAR","p":"RB","pt":34.24,"v":-214.0,"t":"Tier 5","a":1,"m":1,"sc":-4192.9},{"n":"Donovan Edwards MIA","p":"RB","pt":30.95,"v":-217.2,"t":"Tier 5","a":1,"m":1,"sc":-4257.4},{"n":"Carlos Washington Jr. MIA","p":"RB","pt":30.95,"v":-217.2,"t":"Tier 5","a":1,"m":1,"sc":-4257.4},{"n":"Audric Estime NO","p":"RB","pt":31.3,"v":-216.9,"t":"Tier 5","a":1,"m":1,"sc":-4250.5},{"n":"Najee Harris LAC","p":"RB","pt":29.2,"v":-219.0,"t":"Tier 5","a":1,"m":1,"sc":-4291.6},{"n":"Jeremy McNichols WAS","p":"RB","pt":28.6,"v":-219.6,"t":"Tier 5","a":1,"m":1,"sc":-4303.4},{"n":"Seth McGowan IND","p":"RB","pt":28.35,"v":-219.8,"t":"Tier 5","a":1,"m":1,"sc":-4308.3},{"n":"Demond Claiborne MIN","p":"RB","pt":30.62,"v":-217.6,"t":"Tier 5","a":1,"m":1,"sc":-4263.8},{"n":"Kaytron Allen WAS","p":"RB","pt":26.52,"v":-221.7,"t":"Tier 5","a":1,"m":1,"sc":-4344.2},{"n":"Tahj Brooks CIN","p":"RB","pt":27.12,"v":-221.1,"t":"Tier 5","a":1,"m":1,"sc":-4332.4},{"n":"Devin Neal NO","p":"RB","pt":25.1,"v":-223.1,"t":"Tier 5","a":1,"m":1,"sc":-4372.0},{"n":"Hunter Luepke DAL","p":"RB","pt":25.94,"v":-222.3,"t":"Tier 5","a":1,"m":1,"sc":-4355.5},{"n":"Will Shipley PHI","p":"RB","pt":26.3,"v":-221.9,"t":"Tier 5","a":1,"m":1,"sc":-4348.5},{"n":"Nicholas Singleton TEN","p":"RB","pt":24.92,"v":-223.3,"t":"Tier 5","a":1,"m":1,"sc":-4375.5},{"n":"Jerome Ford WAS","p":"RB","pt":21.78,"v":-226.4,"t":"Tier 5","a":1,"m":1,"sc":-4437.1},{"n":"Isaac Guerendo SF","p":"RB","pt":18.18,"v":-230.0,"t":"Tier 5","a":1,"m":1,"sc":-4507.6},{"n":"Michael Burton CLE","p":"RB","pt":17.95,"v":-230.2,"t":"Tier 5","a":1,"m":1,"sc":-4512.1},{"n":"Tyler Badie DEN","p":"RB","pt":17.2,"v":-231.0,"t":"Tier 5","a":1,"m":1,"sc":-4526.8},{"n":"Andrew Beck NYJ","p":"RB","pt":13.23,"v":-235.0,"t":"Tier 5","a":1,"m":1,"sc":-4604.6},{"n":"Alec Ingold LAC","p":"RB","pt":14.09,"v":-234.1,"t":"Tier 5","a":1,"m":1,"sc":-4587.8},{"n":"Adam Prentice DEN","p":"RB","pt":10.31,"v":-237.9,"t":"Tier 5","a":1,"m":1,"sc":-4661.8},{"n":"Max Bredeson MIN","p":"RB","pt":9.2,"v":-239.0,"t":"Tier 5","a":1,"m":1,"sc":-4683.6},{"n":"Kaleb Johnson PIT","p":"RB","pt":7.29,"v":-240.9,"t":"Tier 5","a":1,"m":1,"sc":-4721.0},{"n":"Reggie Gilliam NE","p":"RB","pt":6.79,"v":-241.4,"t":"Tier 5","a":1,"m":1,"sc":-4730.8},{"n":"Riley Nowakowski PIT","p":"RB","pt":6.95,"v":-241.2,"t":"Tier 5","a":1,"m":1,"sc":-4727.7},{"n":"Patrick Ricard NYG","p":"RB","pt":5.95,"v":-242.2,"t":"Tier 5","a":1,"m":1,"sc":-4747.3},{"n":"British Brooks HOU","p":"RB","pt":3.6,"v":-244.6,"t":"Tier 5","a":1,"m":1,"sc":-4793.3},{"n":"DeeJay Dallas JAC","p":"RB","pt":0.0,"v":-248.2,"t":"Tier 5","a":1,"m":1,"sc":-4863.9},{"n":"Kene Nwangwu NYJ","p":"RB","pt":0.0,"v":-248.2,"t":"Tier 5","a":1,"m":1,"sc":-4863.9},{"n":"Bam Knight ARI","p":"RB","pt":0.0,"v":-248.2,"t":"Tier 5","a":1,"m":1,"sc":-4863.9},{"n":"Trey Benson ARI","p":"RB","pt":0.0,"v":-248.2,"t":"Tier 5","a":1,"m":1,"sc":-4863.9},{"n":"Jacob Saylors DET","p":"RB","pt":0.0,"v":-248.2,"t":"Tier 5","a":1,"m":1,"sc":-4863.9},{"n":"Zavier Scott MIN","p":"RB","pt":0.0,"v":-248.2,"t":"Tier 5","a":1,"m":1,"sc":-4863.9},{"n":"Rasheen Ali BAL","p":"RB","pt":0.0,"v":-248.2,"t":"Tier 5","a":1,"m":1,"sc":-4863.9},{"n":"Dylan Laube LV","p":"RB","pt":0.0,"v":-248.2,"t":"Tier 5","a":1,"m":1,"sc":-4863.9},{"n":"Chris Collier LV","p":"RB","pt":0.0,"v":-248.2,"t":"Tier 5","a":1,"m":1,"sc":-4863.9},{"n":"Josh Williams TB","p":"RB","pt":0.0,"v":-248.2,"t":"Tier 5","a":1,"m":1,"sc":-4863.9},{"n":"Puka Nacua LAR","p":"WR","pt":278.92,"v":138.5,"t":"Tier 2","a":49,"m":54,"sc":1647.1},{"n":"Ja'Marr Chase CIN","p":"WR","pt":262.66,"v":122.2,"t":"Tier 2","a":43,"m":47,"sc":1453.7},{"n":"Jaxon Smith-Njigba SEA","p":"WR","pt":249.38,"v":109.0,"t":"Tier 2","a":38,"m":42,"sc":1295.8},{"n":"Amon-Ra St. Brown DET","p":"WR","pt":251.66,"v":111.2,"t":"Tier 2","a":39,"m":43,"sc":1322.9},{"n":"Drake London ATL","p":"WR","pt":224.58,"v":84.2,"t":"Tier 3","a":30,"m":33,"sc":1000.9},{"n":"CeeDee Lamb DAL","p":"WR","pt":209.43,"v":69.0,"t":"Tier 3","a":24,"m":26,"sc":820.7},{"n":"Rashee Rice KC","p":"WR","pt":221.24,"v":80.8,"t":"Tier 3","a":28,"m":31,"sc":961.1},{"n":"Justin Jefferson MIN","p":"WR","pt":205.43,"v":65.0,"t":"Tier 3","a":23,"m":25,"sc":773.1},{"n":"George Pickens DAL","p":"WR","pt":193.37,"v":53.0,"t":"Tier 4","a":19,"m":21,"sc":629.7},{"n":"A.J. Brown NE","p":"WR","pt":196.02,"v":55.6,"t":"Tier 4","a":20,"m":22,"sc":661.2},{"n":"Nico Collins HOU","p":"WR","pt":190.48,"v":50.1,"t":"Tier 4","a":18,"m":20,"sc":595.3},{"n":"Chris Olave NO","p":"WR","pt":199.5,"v":59.1,"t":"Tier 4","a":21,"m":23,"sc":702.6},{"n":"Zay Flowers BAL","p":"WR","pt":190.2,"v":49.8,"t":"Tier 4","a":18,"m":20,"sc":592.0},{"n":"Emeka Egbuka TB","p":"WR","pt":173.8,"v":33.4,"t":"Tier 4","a":12,"m":13,"sc":397.0},{"n":"Davante Adams LAR","p":"WR","pt":176.0,"v":35.6,"t":"Tier 4","a":13,"m":14,"sc":423.1},{"n":"Jameson Williams DET","p":"WR","pt":166.0,"v":25.6,"t":"Tier 5","a":9,"m":10,"sc":304.2},{"n":"Tee Higgins CIN","p":"WR","pt":173.53,"v":33.1,"t":"Tier 4","a":12,"m":13,"sc":393.8},{"n":"Tetairoa McMillan CAR","p":"WR","pt":172.8,"v":32.4,"t":"Tier 4","a":11,"m":12,"sc":385.1},{"n":"DeVonta Smith PHI","p":"WR","pt":180.53,"v":40.1,"t":"Tier 4","a":14,"m":15,"sc":477.0},{"n":"Malik Nabers NYG","p":"WR","pt":175.24,"v":34.8,"t":"Tier 4","a":12,"m":13,"sc":414.1},{"n":"Garrett Wilson NYJ","p":"WR","pt":191.97,"v":51.5,"t":"Tier 4","a":18,"m":20,"sc":613.1},{"n":"Rome Odunze CHI","p":"WR","pt":161.22,"v":20.8,"t":"Tier 5","a":7,"m":8,"sc":247.4},{"n":"Alec Pierce IND","p":"WR","pt":155.44,"v":15.0,"t":"Tier 5","a":5,"m":6,"sc":178.6},{"n":"Terry McLaurin WAS","p":"WR","pt":166.5,"v":26.1,"t":"Tier 5","a":9,"m":10,"sc":310.2},{"n":"DJ Moore BUF","p":"WR","pt":166.93,"v":26.5,"t":"Tier 5","a":9,"m":10,"sc":315.3},{"n":"Ladd McConkey LAC","p":"WR","pt":164.15,"v":23.7,"t":"Tier 5","a":8,"m":9,"sc":282.2},{"n":"Luther Burden III CHI","p":"WR","pt":161.9,"v":21.5,"t":"Tier 5","a":8,"m":9,"sc":255.4},{"n":"Jaylen Waddle DEN","p":"WR","pt":161.26,"v":20.8,"t":"Tier 5","a":7,"m":8,"sc":247.8},{"n":"Courtland Sutton DEN","p":"WR","pt":159.55,"v":19.1,"t":"Tier 5","a":7,"m":8,"sc":227.5},{"n":"Christian Watson GB","p":"WR","pt":146.73,"v":6.3,"t":"Tier 5","a":2,"m":2,"sc":75.0},{"n":"Mike Evans SF","p":"WR","pt":151.2,"v":10.8,"t":"Tier 5","a":4,"m":4,"sc":128.2},{"n":"DK Metcalf PIT","p":"WR","pt":148.69,"v":8.3,"t":"Tier 5","a":3,"m":3,"sc":98.3},{"n":"Marvin Harrison Jr. ARI","p":"WR","pt":150.47,"v":10.1,"t":"Tier 5","a":4,"m":4,"sc":119.5},{"n":"Brian Thomas Jr. JAC","p":"WR","pt":134.04,"v":-6.4,"t":"Tier 5","a":1,"m":1,"sc":-75.9},{"n":"Parker Washington JAC","p":"WR","pt":139.41,"v":-1.0,"t":"Tier 5","a":1,"m":1,"sc":-12.0},{"n":"Quentin Johnston LAC","p":"WR","pt":133.96,"v":-6.5,"t":"Tier 5","a":1,"m":1,"sc":-76.8},{"n":"Jakobi Meyers JAC","p":"WR","pt":147.82,"v":7.4,"t":"Tier 5","a":3,"m":3,"sc":88.0},{"n":"Carnell Tate TEN","p":"WR","pt":138.94,"v":-1.5,"t":"Tier 5","a":1,"m":1,"sc":-17.6},{"n":"Jordan Addison MIN","p":"WR","pt":131.09,"v":-9.3,"t":"Tier 5","a":1,"m":1,"sc":-111.0},{"n":"Jayden Reed GB","p":"WR","pt":140.42,"v":0.0,"t":"Tier 5","a":1,"m":1,"sc":0.0},{"n":"Xavier Worthy KC","p":"WR","pt":134.5,"v":-5.9,"t":"Tier 5","a":1,"m":1,"sc":-70.4},{"n":"Michael Pittman Jr. PIT","p":"WR","pt":150.66,"v":10.2,"t":"Tier 5","a":4,"m":4,"sc":121.8},{"n":"Jordyn Tyson NO","p":"WR","pt":132.34,"v":-8.1,"t":"Tier 5","a":1,"m":1,"sc":-96.1},{"n":"Ricky Pearsall SF","p":"WR","pt":128.46,"v":-12.0,"t":"Tier 5","a":1,"m":1,"sc":-142.2},{"n":"Chris Godwin Jr. TB","p":"WR","pt":137.81,"v":-2.6,"t":"Tier 5","a":1,"m":1,"sc":-31.0},{"n":"Michael Wilson ARI","p":"WR","pt":133.26,"v":-7.2,"t":"Tier 5","a":1,"m":1,"sc":-85.2},{"n":"Rashid Shaheed SEA","p":"WR","pt":122.78,"v":-17.6,"t":"Tier 5","a":1,"m":1,"sc":-209.8},{"n":"Romeo Doubs NE","p":"WR","pt":127.16,"v":-13.3,"t":"Tier 5","a":1,"m":1,"sc":-157.7},{"n":"Wan'Dale Robinson TEN","p":"WR","pt":148.37,"v":8.0,"t":"Tier 5","a":3,"m":3,"sc":94.5},{"n":"Makai Lemon PHI","p":"WR","pt":125.41,"v":-15.0,"t":"Tier 5","a":1,"m":1,"sc":-178.5},{"n":"Calvin Ridley TEN","p":"WR","pt":114.39,"v":-26.0,"t":"Tier 5","a":1,"m":1,"sc":-309.6},{"n":"Matthew Golden GB","p":"WR","pt":121.39,"v":-19.0,"t":"Tier 5","a":1,"m":1,"sc":-226.3},{"n":"Khalil Shakir BUF","p":"WR","pt":135.83,"v":-4.6,"t":"Tier 5","a":1,"m":1,"sc":-54.6},{"n":"John Metchie III CAR","p":"WR","pt":133.15,"v":-7.3,"t":"Tier 5","a":1,"m":1,"sc":-86.5},{"n":"Theo Wease Jr. MIA","p":"WR","pt":113.65,"v":-26.8,"t":"Tier 5","a":1,"m":1,"sc":-318.4},{"n":"Josh Downs IND","p":"WR","pt":137.12,"v":-3.3,"t":"Tier 5","a":1,"m":1,"sc":-39.2},{"n":"Jalen Coker CAR","p":"WR","pt":119.73,"v":-20.7,"t":"Tier 5","a":1,"m":1,"sc":-246.1},{"n":"Rashod Bateman BAL","p":"WR","pt":104.02,"v":-36.4,"t":"Tier 5","a":1,"m":1,"sc":-432.9},{"n":"Tre Tucker LV","p":"WR","pt":114.05,"v":-26.4,"t":"Tier 5","a":1,"m":1,"sc":-313.6},{"n":"Jerry Jeudy CLE","p":"WR","pt":109.29,"v":-31.1,"t":"Tier 5","a":1,"m":1,"sc":-370.2},{"n":"KC Concepcion CLE","p":"WR","pt":113.51,"v":-26.9,"t":"Tier 5","a":1,"m":1,"sc":-320.0},{"n":"Jayden Higgins HOU","p":"WR","pt":107.94,"v":-32.5,"t":"Tier 5","a":1,"m":1,"sc":-386.3},{"n":"Jalen McMillan TB","p":"WR","pt":104.58,"v":-35.8,"t":"Tier 5","a":1,"m":1,"sc":-426.2},{"n":"Jauan Jennings MIN","p":"WR","pt":107.75,"v":-32.7,"t":"Tier 5","a":1,"m":1,"sc":-388.5},{"n":"Jalen Nailor LV","p":"WR","pt":98.17,"v":-42.2,"t":"Tier 5","a":1,"m":1,"sc":-502.5},{"n":"Antonio Williams WAS","p":"WR","pt":99.29,"v":-41.1,"t":"Tier 5","a":1,"m":1,"sc":-489.1},{"n":"Tank Dell HOU","p":"WR","pt":98.93,"v":-41.5,"t":"Tier 5","a":1,"m":1,"sc":-493.4},{"n":"Cooper Kupp SEA","p":"WR","pt":97.31,"v":-43.1,"t":"Tier 5","a":1,"m":1,"sc":-512.7},{"n":"Denzel Boston CLE","p":"WR","pt":97.55,"v":-42.9,"t":"Tier 5","a":1,"m":1,"sc":-509.8},{"n":"Adonai Mitchell NYJ","p":"WR","pt":88.75,"v":-51.7,"t":"Tier 5","a":1,"m":1,"sc":-614.5},{"n":"Omar Cooper Jr. NYJ","p":"WR","pt":95.89,"v":-44.5,"t":"Tier 5","a":1,"m":1,"sc":-529.6},{"n":"Germie Bernard PIT","p":"WR","pt":92.33,"v":-48.1,"t":"Tier 5","a":1,"m":1,"sc":-571.9},{"n":"Darnell Mooney NYG","p":"WR","pt":80.89,"v":-59.5,"t":"Tier 5","a":1,"m":1,"sc":-708.0},{"n":"Kayshon Boutte NE","p":"WR","pt":77.42,"v":-63.0,"t":"Tier 5","a":1,"m":1,"sc":-749.2},{"n":"Travis Hunter JAC","p":"WR","pt":88.35,"v":-52.1,"t":"Tier 5","a":1,"m":1,"sc":-619.2},{"n":"Bub Means NO","p":"WR","pt":82.65,"v":-57.8,"t":"Tier 5","a":1,"m":1,"sc":-687.0},{"n":"Tyquan Thornton KC","p":"WR","pt":69.69,"v":-70.7,"t":"Tier 5","a":1,"m":1,"sc":-841.2},{"n":"Darius Slayton NYG","p":"WR","pt":77.68,"v":-62.7,"t":"Tier 5","a":1,"m":1,"sc":-746.1},{"n":"Ja'Kobi Lane BAL","p":"WR","pt":74.94,"v":-65.5,"t":"Tier 5","a":1,"m":1,"sc":-778.7},{"n":"Christian Kirk SF","p":"WR","pt":81.3,"v":-59.1,"t":"Tier 5","a":1,"m":1,"sc":-703.1},{"n":"Tory Horton SEA","p":"WR","pt":75.95,"v":-64.5,"t":"Tier 5","a":1,"m":1,"sc":-766.7},{"n":"Malik Washington MIA","p":"WR","pt":91.71,"v":-48.7,"t":"Tier 5","a":1,"m":1,"sc":-579.3},{"n":"Jaylin Noel HOU","p":"WR","pt":80.93,"v":-59.5,"t":"Tier 5","a":1,"m":1,"sc":-707.5},{"n":"Nick Westbrook-Ikhine IND","p":"WR","pt":73.94,"v":-66.5,"t":"Tier 5","a":1,"m":1,"sc":-790.6},{"n":"Troy Franklin DEN","p":"WR","pt":78.73,"v":-61.7,"t":"Tier 5","a":1,"m":1,"sc":-733.6},{"n":"Isaac TeSlaa DET","p":"WR","pt":67.59,"v":-72.8,"t":"Tier 5","a":1,"m":1,"sc":-866.1},{"n":"Devaughn Vele NO","p":"WR","pt":73.04,"v":-67.4,"t":"Tier 5","a":1,"m":1,"sc":-801.3},{"n":"De'Zhaun Stribling SF","p":"WR","pt":70.39,"v":-70.0,"t":"Tier 5","a":1,"m":1,"sc":-832.8},{"n":"Hollywood Brown PHI","p":"WR","pt":70.58,"v":-69.8,"t":"Tier 5","a":1,"m":1,"sc":-830.6},{"n":"Andrei Iosivas CIN","p":"WR","pt":69.99,"v":-70.4,"t":"Tier 5","a":1,"m":1,"sc":-837.6},{"n":"Ryan Flournoy DAL","p":"WR","pt":71.75,"v":-68.7,"t":"Tier 5","a":1,"m":1,"sc":-816.7},{"n":"Dyami Brown WAS","p":"WR","pt":65.83,"v":-74.6,"t":"Tier 5","a":1,"m":1,"sc":-887.1},{"n":"Tre' Harris LAC","p":"WR","pt":69.89,"v":-70.5,"t":"Tier 5","a":1,"m":1,"sc":-838.8},{"n":"Caleb Douglas MIA","p":"WR","pt":68.62,"v":-71.8,"t":"Tier 5","a":1,"m":1,"sc":-853.9},{"n":"Chris Bell MIA","p":"WR","pt":66.84,"v":-73.6,"t":"Tier 5","a":1,"m":1,"sc":-875.0},{"n":"Jalen Tolbert MIA","p":"WR","pt":68.28,"v":-72.1,"t":"Tier 5","a":1,"m":1,"sc":-857.9},{"n":"Ted Hurst III TB","p":"WR","pt":64.79,"v":-75.6,"t":"Tier 5","a":1,"m":1,"sc":-899.4},{"n":"Jack Bech LV","p":"WR","pt":69.64,"v":-70.8,"t":"Tier 5","a":1,"m":1,"sc":-841.7},{"n":"Jahan Dotson ATL","p":"WR","pt":63.95,"v":-76.5,"t":"Tier 5","a":1,"m":1,"sc":-909.4},{"n":"Ashton Dulin IND","p":"WR","pt":55.88,"v":-84.5,"t":"Tier 5","a":1,"m":1,"sc":-1005.4},{"n":"Elic Ayomanor TEN","p":"WR","pt":59.25,"v":-81.2,"t":"Tier 5","a":1,"m":1,"sc":-965.3},{"n":"Dontayvion Wicks PHI","p":"WR","pt":63.65,"v":-76.8,"t":"Tier 5","a":1,"m":1,"sc":-913.0},{"n":"Zachariah Branch ATL","p":"WR","pt":61.9,"v":-78.5,"t":"Tier 5","a":1,"m":1,"sc":-933.8},{"n":"Chimere Dike TEN","p":"WR","pt":67.08,"v":-73.3,"t":"Tier 5","a":1,"m":1,"sc":-872.2},{"n":"Van Jefferson WAS","p":"WR","pt":57.29,"v":-83.1,"t":"Tier 5","a":1,"m":1,"sc":-988.6},{"n":"KaVontae Turpin DAL","p":"WR","pt":56.29,"v":-84.1,"t":"Tier 5","a":1,"m":1,"sc":-1000.5},{"n":"Savion Williams GB","p":"WR","pt":58.15,"v":-82.3,"t":"Tier 5","a":1,"m":1,"sc":-978.4},{"n":"Xavier Legette CAR","p":"WR","pt":56.8,"v":-83.6,"t":"Tier 5","a":1,"m":1,"sc":-994.4},{"n":"Pat Bryant DEN","p":"WR","pt":56.98,"v":-83.4,"t":"Tier 5","a":1,"m":1,"sc":-992.3},{"n":"Xavier Hutchinson HOU","p":"WR","pt":53.6,"v":-86.8,"t":"Tier 5","a":1,"m":1,"sc":-1032.5},{"n":"Joshua Palmer BUF","p":"WR","pt":52.37,"v":-88.0,"t":"Tier 5","a":1,"m":1,"sc":-1047.1},{"n":"Marvin Mims Jr. DEN","p":"WR","pt":55.57,"v":-84.8,"t":"Tier 5","a":1,"m":1,"sc":-1009.1},{"n":"Olamide Zaccheaus ATL","p":"WR","pt":59.3,"v":-81.1,"t":"Tier 5","a":1,"m":1,"sc":-964.7},{"n":"Calvin Austin III NYG","p":"WR","pt":47.39,"v":-93.0,"t":"Tier 5","a":1,"m":1,"sc":-1106.4},{"n":"Cedric Tillman CLE","p":"WR","pt":48.73,"v":-91.7,"t":"Tier 5","a":1,"m":1,"sc":-1090.4},{"n":"Keon Coleman BUF","p":"WR","pt":46.5,"v":-93.9,"t":"Tier 5","a":1,"m":1,"sc":-1116.9},{"n":"Elijah Sarratt BAL","p":"WR","pt":45.02,"v":-95.4,"t":"Tier 5","a":1,"m":1,"sc":-1134.5},{"n":"Jahdae Walker CHI","p":"WR","pt":45.02,"v":-95.4,"t":"Tier 5","a":1,"m":1,"sc":-1134.5},{"n":"DeMario Douglas NE","p":"WR","pt":49.57,"v":-90.8,"t":"Tier 5","a":1,"m":1,"sc":-1080.4},{"n":"Jaylin Lane WAS","p":"WR","pt":47.64,"v":-92.8,"t":"Tier 5","a":1,"m":1,"sc":-1103.4},{"n":"Chris Brazzell II CAR","p":"WR","pt":47.09,"v":-93.3,"t":"Tier 5","a":1,"m":1,"sc":-1109.9},{"n":"Demarcus Robinson SF","p":"WR","pt":40.89,"v":-99.5,"t":"Tier 5","a":1,"m":1,"sc":-1183.7},{"n":"Tutu Atwell MIA","p":"WR","pt":40.25,"v":-100.2,"t":"Tier 5","a":1,"m":1,"sc":-1191.3},{"n":"Luke McCaffrey WAS","p":"WR","pt":33.45,"v":-107.0,"t":"Tier 5","a":1,"m":1,"sc":-1272.1},{"n":"Kevin Coleman Jr. MIA","p":"WR","pt":38.83,"v":-101.6,"t":"Tier 5","a":1,"m":1,"sc":-1208.2},{"n":"Treylon Burks WAS","p":"WR","pt":34.38,"v":-106.0,"t":"Tier 5","a":1,"m":1,"sc":-1261.1},{"n":"Jalen Royals KC","p":"WR","pt":36.64,"v":-103.8,"t":"Tier 5","a":1,"m":1,"sc":-1234.2},{"n":"Kendrick Bourne ARI","p":"WR","pt":38.89,"v":-101.5,"t":"Tier 5","a":1,"m":1,"sc":-1207.4},{"n":"Skyler Bell BUF","p":"WR","pt":32.58,"v":-107.8,"t":"Tier 5","a":1,"m":1,"sc":-1282.5},{"n":"Kalif Raymond CHI","p":"WR","pt":38.8,"v":-101.6,"t":"Tier 5","a":1,"m":1,"sc":-1208.5},{"n":"Jordan Whittington LAR","p":"WR","pt":33.15,"v":-107.3,"t":"Tier 5","a":1,"m":1,"sc":-1275.7},{"n":"Bryce Lance NO","p":"WR","pt":32.02,"v":-108.4,"t":"Tier 5","a":1,"m":1,"sc":-1289.1},{"n":"Devontez Walker BAL","p":"WR","pt":27.12,"v":-113.3,"t":"Tier 5","a":1,"m":1,"sc":-1347.4},{"n":"Odell Beckham Jr. NYG","p":"WR","pt":29.48,"v":-110.9,"t":"Tier 5","a":1,"m":1,"sc":-1319.3},{"n":"Zavion Thomas CHI","p":"WR","pt":27.38,"v":-113.0,"t":"Tier 5","a":1,"m":1,"sc":-1344.3},{"n":"Malachi Fields NYG","p":"WR","pt":26.48,"v":-113.9,"t":"Tier 5","a":1,"m":1,"sc":-1355.0},{"n":"Dont'e Thornton Jr. LV","p":"WR","pt":24.09,"v":-116.3,"t":"Tier 5","a":1,"m":1,"sc":-1383.4},{"n":"Konata Mumpfield LAR","p":"WR","pt":23.43,"v":-117.0,"t":"Tier 5","a":1,"m":1,"sc":-1391.3},{"n":"Brenen Thompson LAC","p":"WR","pt":21.96,"v":-118.5,"t":"Tier 5","a":1,"m":1,"sc":-1408.8},{"n":"Mack Hollins NE","p":"WR","pt":21.94,"v":-118.5,"t":"Tier 5","a":1,"m":1,"sc":-1409.0},{"n":"KeAndre Lambert-Smith LAC","p":"WR","pt":21.04,"v":-119.4,"t":"Tier 5","a":1,"m":1,"sc":-1419.7},{"n":"Kyle Williams NE","p":"WR","pt":18.94,"v":-121.5,"t":"Tier 5","a":1,"m":1,"sc":-1444.7},{"n":"Tez Johnson TB","p":"WR","pt":18.73,"v":-121.7,"t":"Tier 5","a":1,"m":1,"sc":-1447.2},{"n":"Isaiah Bond CLE","p":"WR","pt":15.61,"v":-124.8,"t":"Tier 5","a":1,"m":1,"sc":-1484.3},{"n":"Mitch Tinsley CIN","p":"WR","pt":15.6,"v":-124.8,"t":"Tier 5","a":1,"m":1,"sc":-1484.4},{"n":"Xavier Smith LAR","p":"WR","pt":15.86,"v":-124.6,"t":"Tier 5","a":1,"m":1,"sc":-1481.3},{"n":"Cyrus Allen KC","p":"WR","pt":13.39,"v":-127.0,"t":"Tier 5","a":1,"m":1,"sc":-1510.7},{"n":"Greg Dortch DET","p":"WR","pt":13.79,"v":-126.6,"t":"Tier 5","a":1,"m":1,"sc":-1505.9},{"n":"Malik Benson LV","p":"WR","pt":12.17,"v":-128.2,"t":"Tier 5","a":1,"m":1,"sc":-1525.2},{"n":"Anthony Gould IND","p":"WR","pt":12.52,"v":-127.9,"t":"Tier 5","a":1,"m":1,"sc":-1521.0},{"n":"Bo Melton GB","p":"WR","pt":10.73,"v":-129.7,"t":"Tier 5","a":1,"m":1,"sc":-1542.3},{"n":"Mason Tipton NO","p":"WR","pt":10.91,"v":-129.5,"t":"Tier 5","a":1,"m":1,"sc":-1540.2},{"n":"Tyrell Shavers BUF","p":"WR","pt":8.41,"v":-132.0,"t":"Tier 5","a":1,"m":1,"sc":-1569.9},{"n":"Derius Davis LAC","p":"WR","pt":9.39,"v":-131.0,"t":"Tier 5","a":1,"m":1,"sc":-1558.3},{"n":"Ben Skowronek PIT","p":"WR","pt":9.15,"v":-131.3,"t":"Tier 5","a":1,"m":1,"sc":-1561.1},{"n":"David Moore CAR","p":"WR","pt":8.36,"v":-132.1,"t":"Tier 5","a":1,"m":1,"sc":-1570.5},{"n":"Isaiah Williams NYJ","p":"WR","pt":8.53,"v":-131.9,"t":"Tier 5","a":1,"m":1,"sc":-1568.5},{"n":"Colbie Young CIN","p":"WR","pt":7.46,"v":-133.0,"t":"Tier 5","a":1,"m":1,"sc":-1581.2},{"n":"Malachi Corley CLE","p":"WR","pt":6.59,"v":-133.8,"t":"Tier 5","a":1,"m":1,"sc":-1591.6},{"n":"Jonathan Mingo DAL","p":"WR","pt":6.74,"v":-133.7,"t":"Tier 5","a":1,"m":1,"sc":-1589.8},{"n":"Justin Watson HOU","p":"WR","pt":6.38,"v":-134.0,"t":"Tier 5","a":1,"m":1,"sc":-1594.1},{"n":"Darius Cooper PHI","p":"WR","pt":6.99,"v":-133.4,"t":"Tier 5","a":1,"m":1,"sc":-1586.8},{"n":"Tai Felton MIN","p":"WR","pt":6.75,"v":-133.7,"t":"Tier 5","a":1,"m":1,"sc":-1589.7},{"n":"Reggie Virgil ARI","p":"WR","pt":5.96,"v":-134.5,"t":"Tier 5","a":1,"m":1,"sc":-1599.1},{"n":"Kaden Wetjen PIT","p":"WR","pt":5.37,"v":-135.1,"t":"Tier 5","a":1,"m":1,"sc":-1606.1},{"n":"Arian Smith NYJ","p":"WR","pt":4.54,"v":-135.9,"t":"Tier 5","a":1,"m":1,"sc":-1615.9},{"n":"Jimmy Horn Jr. CAR","p":"WR","pt":3.89,"v":-136.5,"t":"Tier 5","a":1,"m":1,"sc":-1623.7},{"n":"Kameron Johnson TB","p":"WR","pt":2.31,"v":-138.1,"t":"Tier 5","a":1,"m":1,"sc":-1642.5},{"n":"JuJu Smith-Schuster NYG","p":"WR","pt":2.62,"v":-137.8,"t":"Tier 5","a":1,"m":1,"sc":-1638.8},{"n":"Braxton Berrios NYG","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Devin Duvernay ARI","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Mason Kinsey TEN","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Michael Bandy DEN","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Skyy Moore GB","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Britain Covey PHI","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Dareke Young LV","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Jacob Cowing SF","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Charlie Jones CIN","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Barion Brown NO","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Jalen Brooks ARI","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Brycen Tremayne CAR","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Nikko Remigio KC","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Jeshaun Jones MIN","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Efton Chism III NE","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"LaJohntay Wester BAL","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Ke'Shawn Williams CIN","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Myles Price MIN","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Gage Larvadain CLE","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Josh Cameron JAC","p":"WR","pt":0.0,"v":-140.4,"t":"Tier 5","a":1,"m":1,"sc":-1669.9},{"n":"Brock Bowers LV","p":"TE","pt":192.76,"v":58.5,"t":"Tier 4","a":21,"m":23,"sc":373.5},{"n":"Trey McBride ARI","p":"TE","pt":204.97,"v":70.7,"t":"Tier 3","a":25,"m":28,"sc":451.5},{"n":"Colston Loveland CHI","p":"TE","pt":164.09,"v":29.8,"t":"Tier 5","a":10,"m":11,"sc":190.4},{"n":"Tyler Warren IND","p":"TE","pt":158.83,"v":24.6,"t":"Tier 5","a":9,"m":10,"sc":156.8},{"n":"Kyle Pitts Sr. ATL","p":"TE","pt":151.81,"v":17.5,"t":"Tier 5","a":6,"m":7,"sc":112.0},{"n":"Dallas Goedert PHI","p":"TE","pt":144.96,"v":10.7,"t":"Tier 5","a":4,"m":4,"sc":68.2},{"n":"Sam LaPorta DET","p":"TE","pt":143.26,"v":9.0,"t":"Tier 5","a":3,"m":3,"sc":57.4},{"n":"Tucker Kraft GB","p":"TE","pt":134.28,"v":0.0,"t":"Tier 5","a":1,"m":1,"sc":0.0},{"n":"Harold Fannin Jr. CLE","p":"TE","pt":151.47,"v":17.2,"t":"Tier 5","a":6,"m":7,"sc":109.8},{"n":"Travis Kelce KC","p":"TE","pt":145.32,"v":11.0,"t":"Tier 5","a":4,"m":4,"sc":70.5},{"n":"George Kittle SF","p":"TE","pt":137.71,"v":3.4,"t":"Tier 5","a":1,"m":1,"sc":21.9},{"n":"Mark Andrews BAL","p":"TE","pt":134.88,"v":0.6,"t":"Tier 5","a":1,"m":1,"sc":3.8},{"n":"Dalton Kincaid BUF","p":"TE","pt":124.88,"v":-9.4,"t":"Tier 5","a":1,"m":1,"sc":-60.0},{"n":"Isaiah Likely NYG","p":"TE","pt":130.81,"v":-3.5,"t":"Tier 5","a":1,"m":1,"sc":-22.2},{"n":"Hunter Henry NE","p":"TE","pt":121.28,"v":-13.0,"t":"Tier 5","a":1,"m":1,"sc":-83.0},{"n":"Jake Ferguson DAL","p":"TE","pt":139.87,"v":5.6,"t":"Tier 5","a":2,"m":2,"sc":35.7},{"n":"Brenton Strange JAC","p":"TE","pt":118.7,"v":-15.6,"t":"Tier 5","a":1,"m":1,"sc":-99.5},{"n":"Juwan Johnson NO","p":"TE","pt":120.01,"v":-14.3,"t":"Tier 5","a":1,"m":1,"sc":-91.1},{"n":"Dalton Schultz HOU","p":"TE","pt":117.71,"v":-16.6,"t":"Tier 5","a":1,"m":1,"sc":-105.8},{"n":"Pat Freiermuth PIT","p":"TE","pt":106.69,"v":-27.6,"t":"Tier 5","a":1,"m":1,"sc":-176.2},{"n":"Kenyon Sadiq NYJ","p":"TE","pt":103.6,"v":-30.7,"t":"Tier 5","a":1,"m":1,"sc":-195.9},{"n":"Greg Dulcich MIA","p":"TE","pt":104.79,"v":-29.5,"t":"Tier 5","a":1,"m":1,"sc":-188.3},{"n":"T.J. Hockenson MIN","p":"TE","pt":112.4,"v":-21.9,"t":"Tier 5","a":1,"m":1,"sc":-139.7},{"n":"Oronde Gadsden II LAC","p":"TE","pt":95.29,"v":-39.0,"t":"Tier 5","a":1,"m":1,"sc":-249.0},{"n":"Terrance Ferguson LAR","p":"TE","pt":88.31,"v":-46.0,"t":"Tier 5","a":1,"m":1,"sc":-293.6},{"n":"AJ Barner SEA","p":"TE","pt":101.48,"v":-32.8,"t":"Tier 5","a":1,"m":1,"sc":-209.5},{"n":"Cade Otton TB","p":"TE","pt":101.24,"v":-33.0,"t":"Tier 5","a":1,"m":1,"sc":-211.0},{"n":"Chig Okonkwo WAS","p":"TE","pt":98.46,"v":-35.8,"t":"Tier 5","a":1,"m":1,"sc":-228.8},{"n":"Mike Gesicki CIN","p":"TE","pt":90.46,"v":-43.8,"t":"Tier 5","a":1,"m":1,"sc":-279.9},{"n":"Evan Engram DEN","p":"TE","pt":93.19,"v":-41.1,"t":"Tier 5","a":1,"m":1,"sc":-262.4},{"n":"Gunnar Helm TEN","p":"TE","pt":89.66,"v":-44.6,"t":"Tier 5","a":1,"m":1,"sc":-285.0},{"n":"David Njoku LAC","p":"TE","pt":76.75,"v":-57.5,"t":"Tier 5","a":1,"m":1,"sc":-367.4},{"n":"Colby Parkinson LAR","p":"TE","pt":75.41,"v":-58.9,"t":"Tier 5","a":1,"m":1,"sc":-376.0},{"n":"Mason Taylor NYJ","p":"TE","pt":78.44,"v":-55.8,"t":"Tier 5","a":1,"m":1,"sc":-356.6},{"n":"Dawson Knox BUF","p":"TE","pt":62.53,"v":-71.8,"t":"Tier 5","a":1,"m":1,"sc":-458.3},{"n":"Michael Mayer LV","p":"TE","pt":71.47,"v":-62.8,"t":"Tier 5","a":1,"m":1,"sc":-401.2},{"n":"Theo Johnson NYG","p":"TE","pt":60.87,"v":-73.4,"t":"Tier 5","a":1,"m":1,"sc":-468.9},{"n":"Tyler Higbee LAR","p":"TE","pt":55.82,"v":-78.5,"t":"Tier 5","a":1,"m":1,"sc":-501.1},{"n":"Darnell Washington PIT","p":"TE","pt":59.09,"v":-75.2,"t":"Tier 5","a":1,"m":1,"sc":-480.2},{"n":"Cole Kmet CHI","p":"TE","pt":52.67,"v":-81.6,"t":"Tier 5","a":1,"m":1,"sc":-521.2},{"n":"Ja'Tavion Sanders CAR","p":"TE","pt":54.49,"v":-79.8,"t":"Tier 5","a":1,"m":1,"sc":-509.6},{"n":"Tommy Tremble CAR","p":"TE","pt":51.16,"v":-83.1,"t":"Tier 5","a":1,"m":1,"sc":-530.9},{"n":"Noah Fant NO","p":"TE","pt":54.85,"v":-79.4,"t":"Tier 5","a":1,"m":1,"sc":-507.3},{"n":"Will Kacmarek MIA","p":"TE","pt":50.54,"v":-83.7,"t":"Tier 5","a":1,"m":1,"sc":-534.8},{"n":"Josh Oliver MIN","p":"TE","pt":42.7,"v":-91.6,"t":"Tier 5","a":1,"m":1,"sc":-584.9},{"n":"Austin Hooper ATL","p":"TE","pt":43.94,"v":-90.3,"t":"Tier 5","a":1,"m":1,"sc":-577.0},{"n":"Daniel Bellinger TEN","p":"TE","pt":40.62,"v":-93.7,"t":"Tier 5","a":1,"m":1,"sc":-598.2},{"n":"Erick All Jr. CIN","p":"TE","pt":47.12,"v":-87.2,"t":"Tier 5","a":1,"m":1,"sc":-556.7},{"n":"Charlie Kolar LAC","p":"TE","pt":39.46,"v":-94.8,"t":"Tier 5","a":1,"m":1,"sc":-605.6},{"n":"Brock Wright DET","p":"TE","pt":41.95,"v":-92.3,"t":"Tier 5","a":1,"m":1,"sc":-589.7},{"n":"Eli Stowers PHI","p":"TE","pt":43.32,"v":-91.0,"t":"Tier 5","a":1,"m":1,"sc":-581.0},{"n":"Noah Gray KC","p":"TE","pt":40.56,"v":-93.7,"t":"Tier 5","a":1,"m":1,"sc":-598.6},{"n":"Luke Musgrave GB","p":"TE","pt":41.36,"v":-92.9,"t":"Tier 5","a":1,"m":1,"sc":-593.5},{"n":"Elijah Arroyo SEA","p":"TE","pt":38.54,"v":-95.7,"t":"Tier 5","a":1,"m":1,"sc":-611.5},{"n":"Adam Trautman DEN","p":"TE","pt":38.1,"v":-96.2,"t":"Tier 5","a":1,"m":1,"sc":-614.3},{"n":"Eli Raridon NE","p":"TE","pt":37.59,"v":-96.7,"t":"Tier 5","a":1,"m":1,"sc":-617.5},{"n":"Davis Allen LAR","p":"TE","pt":36.16,"v":-98.1,"t":"Tier 5","a":1,"m":1,"sc":-626.7},{"n":"John Bates WAS","p":"TE","pt":36.69,"v":-97.6,"t":"Tier 5","a":1,"m":1,"sc":-623.3},{"n":"Ben Sims MIA","p":"TE","pt":35.94,"v":-98.3,"t":"Tier 5","a":1,"m":1,"sc":-628.1},{"n":"Marlin Klein HOU","p":"TE","pt":35.79,"v":-98.5,"t":"Tier 5","a":1,"m":1,"sc":-629.0},{"n":"Jake Tonges SF","p":"TE","pt":33.59,"v":-100.7,"t":"Tier 5","a":1,"m":1,"sc":-643.1},{"n":"Elijah Higgins ARI","p":"TE","pt":36.51,"v":-97.8,"t":"Tier 5","a":1,"m":1,"sc":-624.4},{"n":"Mitchell Evans CAR","p":"TE","pt":30.91,"v":-103.4,"t":"Tier 5","a":1,"m":1,"sc":-660.2},{"n":"Nick Vannett SEA","p":"TE","pt":28.15,"v":-106.1,"t":"Tier 5","a":1,"m":1,"sc":-677.8},{"n":"Connor Heyward LV","p":"TE","pt":31.15,"v":-103.1,"t":"Tier 5","a":1,"m":1,"sc":-658.7},{"n":"Nate Boerkircher JAC","p":"TE","pt":30.46,"v":-103.8,"t":"Tier 5","a":1,"m":1,"sc":-663.1},{"n":"Jeremy Ruckert NYJ","p":"TE","pt":34.79,"v":-99.5,"t":"Tier 5","a":1,"m":1,"sc":-635.4},{"n":"Jackson Hawes BUF","p":"TE","pt":24.75,"v":-109.5,"t":"Tier 5","a":1,"m":1,"sc":-699.6},{"n":"Ben Sinnott WAS","p":"TE","pt":26.02,"v":-108.3,"t":"Tier 5","a":1,"m":1,"sc":-691.4},{"n":"Nate Adkins DEN","p":"TE","pt":27.12,"v":-107.2,"t":"Tier 5","a":1,"m":1,"sc":-684.4},{"n":"Drew Sample CIN","p":"TE","pt":27.86,"v":-106.4,"t":"Tier 5","a":1,"m":1,"sc":-679.7},{"n":"Will Mallory IND","p":"TE","pt":23.25,"v":-111.0,"t":"Tier 5","a":1,"m":1,"sc":-709.1},{"n":"Jack Endries CIN","p":"TE","pt":25.15,"v":-109.1,"t":"Tier 5","a":1,"m":1,"sc":-697.0},{"n":"Foster Moreau HOU","p":"TE","pt":22.39,"v":-111.9,"t":"Tier 5","a":1,"m":1,"sc":-714.6},{"n":"Cade Stover HOU","p":"TE","pt":27.01,"v":-107.3,"t":"Tier 5","a":1,"m":1,"sc":-685.1},{"n":"Hayden Rucci SF","p":"TE","pt":23.9,"v":-110.4,"t":"Tier 5","a":1,"m":1,"sc":-705.0},{"n":"Luke Schoonmaker DAL","p":"TE","pt":24.69,"v":-109.6,"t":"Tier 5","a":1,"m":1,"sc":-699.9},{"n":"Grant Calcaterra PHI","p":"TE","pt":22.75,"v":-111.5,"t":"Tier 5","a":1,"m":1,"sc":-712.3},{"n":"Teagan Quitoriano ARI","p":"TE","pt":23.45,"v":-110.8,"t":"Tier 5","a":1,"m":1,"sc":-707.9},{"n":"Charlie Woerner ATL","p":"TE","pt":24.47,"v":-109.8,"t":"Tier 5","a":1,"m":1,"sc":-701.3},{"n":"Tanner Hudson CIN","p":"TE","pt":24.01,"v":-110.3,"t":"Tier 5","a":1,"m":1,"sc":-704.3},{"n":"Mo Alie-Cox IND","p":"TE","pt":21.84,"v":-112.4,"t":"Tier 5","a":1,"m":1,"sc":-718.1},{"n":"Thomas Fidone II NYG","p":"TE","pt":21.05,"v":-113.2,"t":"Tier 5","a":1,"m":1,"sc":-723.2},{"n":"Cam Grandy CIN","p":"TE","pt":24.0,"v":-110.3,"t":"Tier 5","a":1,"m":1,"sc":-704.3},{"n":"Jaheim Bell PIT","p":"TE","pt":20.9,"v":-113.4,"t":"Tier 5","a":1,"m":1,"sc":-724.1},{"n":"Jared Wiley KC","p":"TE","pt":21.75,"v":-112.5,"t":"Tier 5","a":1,"m":1,"sc":-718.7},{"n":"Seydou Traore MIA","p":"TE","pt":19.35,"v":-114.9,"t":"Tier 5","a":1,"m":1,"sc":-734.0},{"n":"Devin Culp TB","p":"TE","pt":18.3,"v":-116.0,"t":"Tier 5","a":1,"m":1,"sc":-740.8},{"n":"Durham Smythe BAL","p":"TE","pt":18.7,"v":-115.6,"t":"Tier 5","a":1,"m":1,"sc":-738.2},{"n":"Max Klare LAR","p":"TE","pt":15.83,"v":-118.5,"t":"Tier 5","a":1,"m":1,"sc":-756.5},{"n":"Oscar Delp NO","p":"TE","pt":14.88,"v":-119.4,"t":"Tier 5","a":1,"m":1,"sc":-762.6},{"n":"Tanner Koziol JAC","p":"TE","pt":14.26,"v":-120.0,"t":"Tier 5","a":1,"m":1,"sc":-766.6},{"n":"Brevyn Spann-Ford DAL","p":"TE","pt":15.17,"v":-119.1,"t":"Tier 5","a":1,"m":1,"sc":-760.7},{"n":"Payne Durham TB","p":"TE","pt":14.33,"v":-120.0,"t":"Tier 5","a":1,"m":1,"sc":-766.1},{"n":"Hunter Long JAC","p":"TE","pt":13.22,"v":-121.1,"t":"Tier 5","a":1,"m":1,"sc":-773.2},{"n":"Lucas Krull DEN","p":"TE","pt":14.71,"v":-119.6,"t":"Tier 5","a":1,"m":1,"sc":-763.7},{"n":"Ian Thomas LV","p":"TE","pt":13.6,"v":-120.7,"t":"Tier 5","a":1,"m":1,"sc":-770.8},{"n":"Chris Manhertz NYG","p":"TE","pt":11.56,"v":-122.7,"t":"Tier 5","a":1,"m":1,"sc":-783.8},{"n":"Blake Whiteheart CLE","p":"TE","pt":12.04,"v":-122.2,"t":"Tier 5","a":1,"m":1,"sc":-780.7},{"n":"Cole Turner MIA","p":"TE","pt":9.68,"v":-124.6,"t":"Tier 5","a":1,"m":1,"sc":-795.8},{"n":"Luke Farrell SF","p":"TE","pt":8.16,"v":-126.1,"t":"Tier 5","a":1,"m":1,"sc":-805.5},{"n":"CJ Dippre NE","p":"TE","pt":7.56,"v":-126.7,"t":"Tier 5","a":1,"m":1,"sc":-809.3},{"n":"Josh Cuevas BAL","p":"TE","pt":6.89,"v":-127.4,"t":"Tier 5","a":1,"m":1,"sc":-813.6},{"n":"Tyler Conklin DET","p":"TE","pt":7.4,"v":-126.9,"t":"Tier 5","a":1,"m":1,"sc":-810.4},{"n":"Eric Saubert SEA","p":"TE","pt":6.92,"v":-127.4,"t":"Tier 5","a":1,"m":1,"sc":-813.4},{"n":"Sam Roush CHI","p":"TE","pt":7.19,"v":-127.1,"t":"Tier 5","a":1,"m":1,"sc":-811.7},{"n":"Drew Ogletree IND","p":"TE","pt":7.26,"v":-127.0,"t":"Tier 5","a":1,"m":1,"sc":-811.3},{"n":"Johnny Mundt PHI","p":"TE","pt":6.47,"v":-127.8,"t":"Tier 5","a":1,"m":1,"sc":-816.3},{"n":"Tip Reiman ARI","p":"TE","pt":6.73,"v":-127.5,"t":"Tier 5","a":1,"m":1,"sc":-814.6},{"n":"Joe Royer CLE","p":"TE","pt":6.68,"v":-127.6,"t":"Tier 5","a":1,"m":1,"sc":-815.0},{"n":"Quintin Morris JAC","p":"TE","pt":0.0,"v":-134.3,"t":"Tier 5","a":1,"m":1,"sc":-857.6},{"n":"Jack Stoll CLE","p":"TE","pt":0.0,"v":-134.3,"t":"Tier 5","a":1,"m":1,"sc":-857.6},{"n":"Jelani Woods NYJ","p":"TE","pt":0.0,"v":-134.3,"t":"Tier 5","a":1,"m":1,"sc":-857.6},{"n":"Julian Hill NE","p":"TE","pt":0.0,"v":-134.3,"t":"Tier 5","a":1,"m":1,"sc":-857.6},{"n":"Jason Myers K SEA","p":"K","pt":170.4,"v":33.5,"t":"Tier 4","a":12,"m":13,"sc":121.1},{"n":"Ka'imi Fairbairn K HOU","p":"K","pt":162.82,"v":25.9,"t":"Tier 5","a":9,"m":10,"sc":93.6},{"n":"Brandon Aubrey K DAL","p":"K","pt":160.59,"v":23.7,"t":"Tier 5","a":8,"m":9,"sc":85.6},{"n":"Spencer Shrader K IND","p":"K","pt":145.63,"v":8.7,"t":"Tier 5","a":3,"m":3,"sc":31.5},{"n":"Nick Folk K ATL","p":"K","pt":162.09,"v":25.2,"t":"Tier 5","a":9,"m":10,"sc":91.0},{"n":"Jake Bates K DET","p":"K","pt":149.24,"v":12.3,"t":"Tier 5","a":4,"m":4,"sc":44.5},{"n":"Cameron Dicker K LAC","p":"K","pt":149.18,"v":12.2,"t":"Tier 5","a":4,"m":4,"sc":44.3},{"n":"Cairo Santos K CHI","p":"K","pt":145.24,"v":8.3,"t":"Tier 5","a":3,"m":3,"sc":30.1},{"n":"Harrison Mevis K LAR","p":"K","pt":144.78,"v":7.8,"t":"Tier 5","a":3,"m":3,"sc":28.4},{"n":"Chase McLaughlin K TB","p":"K","pt":138.09,"v":1.2,"t":"Tier 5","a":1,"m":1,"sc":4.2},{"n":"Will Reichard K MIN","p":"K","pt":148.39,"v":11.5,"t":"Tier 5","a":4,"m":4,"sc":41.4},{"n":"Evan McPherson K CIN","p":"K","pt":139.84,"v":2.9,"t":"Tier 5","a":1,"m":1,"sc":10.5},{"n":"Tyler Loop K BAL","p":"K","pt":127.93,"v":-9.0,"t":"Tier 5","a":1,"m":1,"sc":-32.6},{"n":"Wil Lutz K DEN","p":"K","pt":132.42,"v":-4.5,"t":"Tier 5","a":1,"m":1,"sc":-16.3},{"n":"Harrison Butker K KC","p":"K","pt":128.66,"v":-8.3,"t":"Tier 5","a":1,"m":1,"sc":-29.9},{"n":"Cam Little K JAC","p":"K","pt":136.93,"v":0.0,"t":"Tier 5","a":1,"m":1,"sc":0.0},{"n":"Eddy Pineiro K SF","p":"K","pt":132.25,"v":-4.7,"t":"Tier 5","a":1,"m":1,"sc":-16.9},{"n":"Charlie Smyth K NO","p":"K","pt":123.21,"v":-13.7,"t":"Tier 5","a":1,"m":1,"sc":-49.6},{"n":"Jake Moody K WAS","p":"K","pt":115.07,"v":-21.9,"t":"Tier 5","a":1,"m":1,"sc":-79.1},{"n":"Andres Borregales K NE","p":"K","pt":117.72,"v":-19.2,"t":"Tier 5","a":1,"m":1,"sc":-69.5},{"n":"Tyler Bass K BUF","p":"K","pt":114.81,"v":-22.1,"t":"Tier 5","a":1,"m":1,"sc":-80.0},{"n":"Jason Sanders K NYJ","p":"K","pt":120.44,"v":-16.5,"t":"Tier 5","a":1,"m":1,"sc":-59.6},{"n":"Trey Smack K GB","p":"K","pt":108.92,"v":-28.0,"t":"Tier 5","a":1,"m":1,"sc":-101.3},{"n":"Riley Patterson K MIA","p":"K","pt":120.11,"v":-16.8,"t":"Tier 5","a":1,"m":1,"sc":-60.8},{"n":"Jake Elliott K PHI","p":"K","pt":117.3,"v":-19.6,"t":"Tier 5","a":1,"m":1,"sc":-71.0},{"n":"Zane Gonzalez K MIA","p":"K","pt":119.17,"v":-17.8,"t":"Tier 5","a":1,"m":1,"sc":-64.2},{"n":"Joey Slye K TEN","p":"K","pt":114.55,"v":-22.4,"t":"Tier 5","a":1,"m":1,"sc":-80.9},{"n":"Chad Ryland K ARI","p":"K","pt":114.37,"v":-22.6,"t":"Tier 5","a":1,"m":1,"sc":-81.6},{"n":"Chris Boswell K PIT","p":"K","pt":116.17,"v":-20.8,"t":"Tier 5","a":1,"m":1,"sc":-75.1},{"n":"Matt Gay K LV","p":"K","pt":105.74,"v":-31.2,"t":"Tier 5","a":1,"m":1,"sc":-112.8},{"n":"Andre Szmyt K CLE","p":"K","pt":96.06,"v":-40.9,"t":"Tier 5","a":1,"m":1,"sc":-147.8},{"n":"Ryan Fitzgerald K CAR","p":"K","pt":91.83,"v":-45.1,"t":"Tier 5","a":1,"m":1,"sc":-163.1},{"n":"Ben Sauls K NYG","p":"K","pt":66.48,"v":-70.5,"t":"Tier 5","a":1,"m":1,"sc":-254.8},{"n":"Dominic Zvada K NYG","p":"K","pt":20.98,"v":-116.0,"t":"Tier 5","a":1,"m":1,"sc":-419.4},{"n":"Matt Prater K BUF","p":"K","pt":0.0,"v":-136.9,"t":"Tier 5","a":1,"m":1,"sc":-495.3},{"n":"Blake Grupe K IND","p":"K","pt":0.0,"v":-136.9,"t":"Tier 5","a":1,"m":1,"sc":-495.3},{"n":"Arizona","p":"DEF","pt":82.5,"v":-54.4,"t":"Tier 5","a":1,"m":1,"sc":-171.7},{"n":"Atlanta","p":"DEF","pt":142.7,"v":5.8,"t":"Tier 5","a":2,"m":2,"sc":18.3},{"n":"Baltimore","p":"DEF","pt":145.1,"v":8.2,"t":"Tier 5","a":3,"m":3,"sc":25.9},{"n":"Buffalo","p":"DEF","pt":130.0,"v":-6.9,"t":"Tier 5","a":1,"m":1,"sc":-21.8},{"n":"Carolina","p":"DEF","pt":115.5,"v":-21.4,"t":"Tier 5","a":1,"m":1,"sc":-67.5},{"n":"Chicago","p":"DEF","pt":132.5,"v":-4.4,"t":"Tier 5","a":1,"m":1,"sc":-13.9},{"n":"Cincinnati","p":"DEF","pt":135.3,"v":-1.6,"t":"Tier 5","a":1,"m":1,"sc":-5.0},{"n":"Cleveland","p":"DEF","pt":141.4,"v":4.5,"t":"Tier 5","a":2,"m":2,"sc":14.2},{"n":"Dallas","p":"DEF","pt":108.0,"v":-28.9,"t":"Tier 5","a":1,"m":1,"sc":-91.2},{"n":"Denver","p":"DEF","pt":166.9,"v":30.0,"t":"Tier 4","a":11,"m":12,"sc":94.7},{"n":"Detroit","p":"DEF","pt":147.4,"v":10.5,"t":"Tier 5","a":4,"m":4,"sc":33.1},{"n":"Green Bay","p":"DEF","pt":120.4,"v":-16.5,"t":"Tier 5","a":1,"m":1,"sc":-52.1},{"n":"Houston","p":"DEF","pt":167.0,"v":30.1,"t":"Tier 4","a":11,"m":12,"sc":95.0},{"n":"Indianapolis","p":"DEF","pt":122.3,"v":-14.6,"t":"Tier 5","a":1,"m":1,"sc":-46.1},{"n":"Jacksonville","p":"DEF","pt":115.9,"v":-21.0,"t":"Tier 5","a":1,"m":1,"sc":-66.3},{"n":"Kansas City","p":"DEF","pt":113.8,"v":-23.1,"t":"Tier 5","a":1,"m":1,"sc":-72.9},{"n":"LA Chargers","p":"DEF","pt":136.9,"v":0.0,"t":"Tier 5","a":1,"m":1,"sc":0.0},{"n":"LA Rams","p":"DEF","pt":144.6,"v":7.7,"t":"Tier 5","a":3,"m":3,"sc":24.3},{"n":"Las Vegas","p":"DEF","pt":116.5,"v":-20.4,"t":"Tier 5","a":1,"m":1,"sc":-64.4},{"n":"Miami","p":"DEF","pt":94.9,"v":-42.0,"t":"Tier 5","a":1,"m":1,"sc":-132.6},{"n":"Minnesota","p":"DEF","pt":152.1,"v":15.2,"t":"Tier 5","a":5,"m":6,"sc":48.0},{"n":"New England","p":"DEF","pt":129.6,"v":-7.3,"t":"Tier 5","a":1,"m":1,"sc":-23.0},{"n":"New Orleans","p":"DEF","pt":137.4,"v":0.5,"t":"Tier 5","a":1,"m":1,"sc":1.6},{"n":"NY Giants","p":"DEF","pt":109.0,"v":-27.9,"t":"Tier 5","a":1,"m":1,"sc":-88.1},{"n":"NY Jets","p":"DEF","pt":109.5,"v":-27.4,"t":"Tier 5","a":1,"m":1,"sc":-86.5},{"n":"Philadelphia","p":"DEF","pt":141.2,"v":4.3,"t":"Tier 5","a":2,"m":2,"sc":13.6},{"n":"Pittsburgh","p":"DEF","pt":154.0,"v":17.1,"t":"Tier 5","a":6,"m":7,"sc":54.0},{"n":"San Francisco","p":"DEF","pt":98.6,"v":-38.3,"t":"Tier 5","a":1,"m":1,"sc":-120.9},{"n":"Seattle","p":"DEF","pt":149.7,"v":12.8,"t":"Tier 5","a":5,"m":6,"sc":40.4},{"n":"Tampa Bay","p":"DEF","pt":130.1,"v":-6.8,"t":"Tier 5","a":1,"m":1,"sc":-21.5},{"n":"Tennessee","p":"DEF","pt":112.6,"v":-24.3,"t":"Tier 5","a":1,"m":1,"sc":-76.7},{"n":"Washington","p":"DEF","pt":88.2,"v":-48.7,"t":"Tier 5","a":1,"m":1,"sc":-153.7}];
+
+const DEFAULT_TEAM_NAMES = ["Sex Tape", "Joe", "Mook", "Scott", "Kyle", "Dan Meyer", "Mike Ayers", "Moose", "Dan \"High Road\"", "Travis", "JTP", "Richy"];
+
+const BUDGET_PER_TEAM = 250;
+const ROSTER_SPOTS = 17;
+const STORAGE_KEY = "dynasty-draft-v1";
+
+const POSITIONS = ["QB", "RB", "WR", "TE", "K", "DEF"];
+const POS_COLOR = {
+  QB: "#e8734a",
+  RB: "#5fd685",
+  WR: "#5b9bf0",
+  TE: "#c58af0",
+  K: "#e0c14a",
+  DEF: "#9aa4b8",
+};
+
+const DEFAULT_BASE = RAW_PLAYERS.map((p) => ({
+  name: p.n,
+  position: p.p,
+  points: p.pt,
+}));
+
+/* ---------------------------------------------------------
+   Ranking engine — mirrors the workbook's Rankings_Engine /
+   Scarcity_Engine / Auction_Values formula chain, so projections
+   can be refreshed at any time and everything recomputes live.
+   Player identity is the NAME string (stable across recomputes,
+   so existing keeper/pick references never break).
+---------------------------------------------------------- */
+const REPL_RANK = { QB: 29, RB: 25, WR: 37, TE: 13, K: 13, DEF: 13 };
+const STARTERS_REQ = { QB: 24, RB: 24, WR: 36, TE: 12, K: 12, DEF: 12 };
+const TEAMS_COUNT = 12;
+const LEAGUE_BUDGET = BUDGET_PER_TEAM * TEAMS_COUNT; // 12-team Dynasty league
+
+// Starting lineup requirements — drives the Team Rosters starter/bench split
+// and the SUPERFLEX board filter. BN is informational only (ROSTER_SPOTS is
+// the real cap); everything else determines how many of each slot get filled.
+const ROSTER_REQUIREMENTS = { QB: 1, RB: 2, WR: 3, TE: 1, FLEX: 0, SUPERFLEX: 1, K: 1, DEF: 1, BN: 7 };
+
+// Historical auction prices actually paid over the last 4 dynasty drafts,
+// keyed by position -> position rank -> [avgSalary, maxSalary, yearsOfData].
+// Used to calibrate the formulaic auction values toward real market behavior.
+const HISTORICAL_SALARY = {"RB":{"1":[48.8,56,5],"2":[45.8,54,5],"3":[50.6,55,5],"4":[52.2,59,5],"5":[47.0,52,5],"6":[45.8,55,5],"7":[37.4,53,5],"8":[41.8,57,5],"9":[26.2,41,5],"10":[24.2,38,5],"11":[20.6,32,5],"12":[23.4,38,5],"13":[26.8,36,5],"14":[32.0,48,5],"15":[25.6,37,5],"16":[29.2,53,5],"17":[20.2,50,5],"18":[27.4,50.0,5],"19":[15.6,22,5],"20":[15.4,18,5],"21":[19.0,29,5],"22":[17.8,27,5],"23":[18.0,30.0,5],"24":[11.6,23,5],"25":[21.6,30,5],"26":[18.8,40.0,5],"27":[18.4,27,5],"28":[17.0,24,5],"29":[8.4,13.0,5],"30":[9.2,16,5],"31":[9.0,14,5],"32":[5.0,11,5],"33":[5.2,10,5],"34":[7.0,16,5],"35":[8.2,18,5],"36":[8.8,16,5],"37":[12.6,47,5],"38":[5.0,8,5],"39":[4.0,9,5],"40":[4.6,9.0,5],"41":[3.2,6,5],"42":[3.2,9,5],"43":[4.4,14,5],"44":[2.8,5,4],"45":[1.2,2,5],"46":[2.2,4,4],"47":[2.2,6,4],"48":[1.5,3,4],"49":[1.0,1,5],"50":[1.3,2,3],"51":[1.3,2,3],"52":[1.0,1,1],"53":[1.0,1,1],"57":[1.0,1.0,1],"72":[17.0,17.0,1],"58":[1.0,1.0,1],"62":[1.0,1.0,1],"82":[1.0,1.0,1],"61":[1.0,1.0,1],"86":[1.0,1.0,1]},"QB":{"1":[45.4,56,5],"2":[41.4,58,5],"3":[52.0,72,5],"4":[43.8,49.0,5],"5":[41.0,53,5],"6":[39.4,59,5],"7":[35.8,51.0,5],"8":[37.0,49.0,5],"9":[22.2,48,5],"10":[22.8,38,5],"11":[33.6,45,5],"12":[35.8,45.0,5],"13":[29.6,39,5],"14":[29.4,42,5],"15":[25.4,34.0,5],"16":[25.2,40.0,5],"17":[19.8,24,5],"18":[22.4,47,5],"19":[18.2,27.0,5],"20":[22.4,47,5],"21":[15.6,21,5],"22":[20.6,25,5],"23":[21.2,35,5],"24":[20.6,30.0,5],"25":[19.0,31,5],"26":[12.0,16,5],"27":[12.2,18.0,5],"28":[8.2,12,5],"29":[10.6,21.0,5],"30":[4.6,8.0,5],"31":[9.0,12,5],"32":[4.4,8,5],"33":[5.6,12,5],"34":[3.5,5,4],"35":[3.0,5.0,2],"36":[1.5,2.0,2],"43":[1.0,1.0,1]},"WR":{"1":[39.2,47.0,5],"2":[39.2,60,5],"3":[44.4,55,5],"4":[30.4,44,5],"5":[44.0,51,5],"6":[35.4,45,5],"7":[32.2,49.0,5],"8":[38.0,49.0,5],"9":[19.8,32,5],"10":[30.2,40,5],"11":[17.0,25,5],"12":[24.8,28,5],"13":[24.2,30,5],"14":[36.6,48,5],"15":[27.2,36,5],"16":[26.0,35,5],"17":[17.4,26,5],"18":[24.0,33,5],"19":[19.0,26.0,5],"20":[26.0,37,5],"21":[16.6,28.0,5],"22":[17.0,23,5],"23":[20.8,29,5],"24":[20.8,26,5],"25":[14.6,19,5],"26":[19.4,29.0,5],"27":[15.4,26,5],"28":[18.4,47,5],"29":[9.2,14,5],"30":[13.4,16,5],"31":[13.2,22,5],"32":[11.6,23,5],"33":[13.6,21,5],"34":[15.6,31,5],"35":[8.0,15,5],"36":[8.8,14,5],"37":[9.6,18,5],"38":[10.6,17,5],"39":[7.0,11,5],"40":[8.4,13,5],"41":[8.6,21,5],"42":[4.2,9,5],"43":[5.2,9,5],"44":[5.6,7.0,5],"45":[7.0,12.0,5],"46":[7.8,17,5],"47":[2.2,4,4],"48":[4.6,10,5],"49":[5.4,20,5],"50":[3.0,4,4],"51":[2.6,6,5],"52":[8.6,33,5],"53":[7.0,10,5],"54":[1.4,2,5],"55":[1.6,3.0,5],"56":[1.5,2,4],"57":[5.2,15,5],"58":[2.5,3,4],"59":[3.0,7,5],"60":[1.5,2,4],"61":[2.2,4,4],"62":[2.0,3,4],"63":[2.2,5,5],"64":[1.0,1,4],"65":[1.0,1,3],"66":[1.0,1,4],"67":[1.5,2,2],"68":[2.5,4.0,2],"69":[1.0,1,1],"101":[1.0,1.0,1],"86":[1.0,1.0,1],"107":[1.0,1.0,1],"88":[4.0,4.0,1],"73":[1.0,1.0,1]},"TE":{"1":[21.4,29,5],"2":[24.8,36,5],"3":[20.0,28,5],"4":[14.8,21,5],"5":[13.6,20,5],"6":[12.0,22,5],"7":[16.0,22,5],"8":[6.4,12,5],"9":[7.8,15,5],"10":[8.2,18,5],"11":[9.0,15,5],"12":[5.0,13,5],"13":[6.2,11.0,5],"14":[1.8,3,5],"15":[2.4,5,5],"16":[2.0,4,5],"17":[1.0,1,5],"18":[2.2,4,4],"19":[1.5,2.0,2],"20":[1.0,1,2],"21":[2.0,2,1],"31":[1.0,1.0,1],"26":[1.0,1.0,1]}};
+const FLEX_ELIGIBLE = ["RB", "WR", "TE"];
+const SUPERFLEX_ELIGIBLE = ["QB", "RB", "WR", "TE"];
+
+function tierFor(vbd) {
+  if (vbd >= 150) return "Tier 1";
+  if (vbd >= 100) return "Tier 2";
+  if (vbd >= 60) return "Tier 3";
+  if (vbd >= 30) return "Tier 4";
+  return "Tier 5";
+}
+
+function computeRankings(base) {
+  // base: [{name, position, points}] — returns fully computed player objects
+  const players = base.map((p) => ({ ...p }));
+  const byPos = {};
+  players.forEach((p) => {
+    if (!byPos[p.position]) byPos[p.position] = [];
+    byPos[p.position].push(p);
+  });
+  Object.keys(byPos).forEach((pos) => {
+    byPos[pos].sort((a, b) => b.points - a.points);
+    byPos[pos].forEach((p, i) => {
+      p.posRank = i + 1;
+    });
+  });
+
+  const replValue = {};
+  Object.keys(REPL_RANK).forEach((pos) => {
+    const list = byPos[pos] || [];
+    const rank = REPL_RANK[pos];
+    const idx = Math.min(rank, list.length) - 1;
+    replValue[pos] = idx >= 0 ? list[idx].points : 0;
+  });
+
+  players.forEach((p) => {
+    p.vbd = p.points - (replValue[p.position] ?? 0);
+    p.tier = tierFor(p.vbd);
+  });
+
+  // Self-calibrating budget split: the league only has $LEAGUE_BUDGET total to
+  // spend across ROSTER_SPOTS × TEAMS_COUNT players. Anyone at or below
+  // replacement level realistically just costs $1 to roster — so back that
+  // guaranteed $1-per-filler-spot cost out of the pool first, then divide the
+  // REMAINING budget proportionally among players who actually have positive
+  // value. This keeps the model's total assigned spending equal to the real
+  // total budget (previously a fixed 0.699 coefficient left ~20% of the
+  // league's real spending unaccounted for, which is what made every team's
+  // Draft Value look negative on the Draft Analysis tab).
+  const draftPoolSize = ROSTER_SPOTS * TEAMS_COUNT;
+  const positiveVbdCount = players.filter((p) => p.vbd > 0).length;
+  const fillerCount = Math.max(0, draftPoolSize - positiveVbdCount);
+  const budgetForValuePlayers = LEAGUE_BUDGET - fillerCount * 1;
+  const totalVbd = players.reduce((s, p) => s + Math.max(0, p.vbd), 0) || 1;
+  players.forEach((p) => {
+    const vbdPct = Math.max(0, p.vbd) / totalVbd;
+    p.auctionValue = Math.max(1, Math.round(vbdPct * budgetForValuePlayers));
+    p.maxBid = Math.round(p.auctionValue * 1.1);
+  });
+
+  // Calibrate toward real market prices: blend the formulaic auction value with
+  // what players at that position + position-rank actually sold for over the
+  // last 4 drafts. More years of consistent data at a rank = more trust in the
+  // historical number; sparse/no data (deep bench ranks) leans on the formula.
+  players.forEach((p) => {
+    const h = HISTORICAL_SALARY[p.position] && HISTORICAL_SALARY[p.position][p.posRank];
+    if (!h) return;
+    const [histAvg, histMax, years] = h;
+    const weight = years >= 3 ? 0.5 : years === 2 ? 0.4 : 0.3;
+    const formulaMaxBid = Math.round(p.auctionValue * 1.1);
+    p.auctionValue = Math.max(1, Math.round(p.auctionValue * (1 - weight) + histAvg * weight));
+    // Historical MAX at a rank is a single-season data point with only 4 years on
+    // file — it's noisy, so it's blended the same gentle way rather than used as a
+    // hard floor (a hard floor let one outlier bidding war years ago set an
+    // inflated ceiling for every future player who happens to land that rank).
+    p.maxBid = Math.max(p.auctionValue, Math.round(formulaMaxBid * (1 - weight) + histMax * weight));
+  });
+
+  // Safety net: within a position, a lower-projected player should never end up
+  // with a higher auction value or max bid than someone projected for more points
+  // — clamp any inversions the historical blend above might introduce.
+  Object.keys(byPos).forEach((pos) => {
+    const list = byPos[pos];
+    for (let i = 1; i < list.length; i++) {
+      if (list[i].auctionValue > list[i - 1].auctionValue) {
+        list[i].auctionValue = list[i - 1].auctionValue;
+      }
+      if (list[i].maxBid > list[i - 1].maxBid) {
+        list[i].maxBid = list[i - 1].maxBid;
+      }
+    }
+  });
+
+  const scarcityD = {};
+  Object.keys(STARTERS_REQ).forEach((pos) => {
+    const list = byPos[pos] || [];
+    const B = STARTERS_REQ[pos];
+    const top = list.filter((p) => p.posRank <= B);
+    const sum = top.reduce((s, p) => s + p.vbd, 0);
+    scarcityD[pos] = B > 0 ? sum / B : 0;
+  });
+  const mult = {};
+  Object.keys(STARTERS_REQ).forEach((pos) => {
+    const d = scarcityD[pos];
+    if (pos === "K") mult[pos] = 0.01 + d * 0.25;
+    else if (pos === "DEF") mult[pos] = 0.1 + d * 0.25;
+    else mult[pos] = 1 + d * 0.25;
+  });
+  // K/DEF scarcity gets dampened further on top of the base formula above —
+  // both positions are deep and replaceable all season, so their scarcity
+  // value shouldn't compete with skill positions late in the draft.
+  const SCARCITY_DAMPEN = { TE: 0.65, K: 0.15, DEF: 0.15 };
+  const belowReplacementAnchor = Math.max(...players.map((p) => p.points), 0) + 1;
+  players.forEach((p) => {
+    // Only amplify/dampen VBD that's actually above replacement level. Applying
+    // a position multiplier to a NEGATIVE VBD inverts its intent — a bigger
+    // multiplier on a "less bad" number can end up more negative than a small
+    // multiplier on a "more bad" number, which is exactly how deep bench players
+    // at scarce-but-thin positions were sneaking ahead of players with real,
+    // meaningful point projections. Below replacement, VBD is still relative
+    // to each position's own replacement baseline, which can make a 0-point
+    // player at a thin position look "less bad" than a mediocre player at a
+    // deep one purely from differing baselines — not what "low point
+    // projection" should mean. So below replacement, rank on raw points
+    // instead (shifted to stay below every above-replacement score), which
+    // puts 0-point players at the true bottom regardless of position.
+    p.scarcity =
+      p.vbd > 0
+        ? p.vbd * (mult[p.position] ?? 1) * (SCARCITY_DAMPEN[p.position] ?? 1)
+        : p.points - belowReplacementAnchor;
+  });
+
+  return players.map((p) => ({
+    id: p.name,
+    name: p.name,
+    position: p.position,
+    points: p.points,
+    vbd: p.vbd,
+    tier: p.tier,
+    auctionValue: p.auctionValue,
+    maxBid: p.maxBid,
+    scarcity: p.scarcity,
+  }));
+}
+
+/* ---------------------------------------------------------
+   Starting lineup assignment — given a team's drafted/kept entries,
+   fills required slots with the highest-points eligible player at
+   each, then FLEX, then SUPERFLEX, leaving the rest on the bench.
+   Shared by the Team Rosters and Draft Analysis views.
+---------------------------------------------------------- */
+function buildLineup(entries, players, req) {
+  const withData = entries
+    .map((e) => ({ ...e, player: players.find((p) => p.id === e.playerId) }))
+    .filter((e) => e.player);
+
+  const used = new Set();
+  const takeBest = (positions) => {
+    const candidates = withData.filter((e) => positions.includes(e.player.position) && !used.has(e.playerId));
+    candidates.sort((a, b) => b.player.points - a.player.points);
+    return candidates[0] || null;
+  };
+
+  const slots = [];
+  ["QB", "RB", "WR", "TE", "K", "DEF"].forEach((pos) => {
+    const count = req[pos] || 0;
+    for (let i = 0; i < count; i++) {
+      const best = takeBest([pos]);
+      if (best) used.add(best.playerId);
+      slots.push({ label: `${pos}${i + 1}`, entry: best });
+    }
+  });
+  for (let i = 0; i < (req.FLEX || 0); i++) {
+    const best = takeBest(FLEX_ELIGIBLE);
+    if (best) used.add(best.playerId);
+    slots.push({ label: `FLEX${i + 1}`, entry: best });
+  }
+  for (let i = 0; i < (req.SUPERFLEX || 0); i++) {
+    const best = takeBest(SUPERFLEX_ELIGIBLE);
+    if (best) used.add(best.playerId);
+    slots.push({ label: `SFLX${i + 1}`, entry: best });
+  }
+
+  const POSITION_ORDER = { QB: 0, RB: 1, WR: 2, TE: 3, K: 4, DEF: 5 };
+  const bench = withData
+    .filter((e) => !used.has(e.playerId))
+    .sort((a, b) => {
+      const posDiff = (POSITION_ORDER[a.player.position] ?? 9) - (POSITION_ORDER[b.player.position] ?? 9);
+      if (posDiff !== 0) return posDiff;
+      return b.player.points - a.player.points;
+    });
+
+  const starterPoints = slots.reduce((s, sl) => s + (sl.entry ? sl.entry.player.points : 0), 0);
+
+  return { slots, bench, starterPoints };
+}
+
+
+/* ---------------------------------------------------------
+   CSV helpers (projections import, results export)
+---------------------------------------------------------- */
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, "").toLowerCase());
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cells = lines[i].split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+    const row = {};
+    headers.forEach((h, idx) => {
+      row[h] = cells[idx];
+    });
+    rows.push(row);
+  }
+  return rows;
+}
+
+function downloadBlob(content, filename, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function fmtMoney(n) {
+  return "$" + Math.round(n).toLocaleString();
+}
+
+/* ---------------------------------------------------------
+   Persistence helpers
+---------------------------------------------------------- */
+async function loadState() {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    /* no saved state yet, or storage unavailable */
+  }
+  return null;
+}
+async function saveState(state) {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    /* best effort */
+  }
+}
+
+/* ---------------------------------------------------------
+   Root component
+---------------------------------------------------------- */
+function App() {
+  const [ready, setReady] = useState(false);
+  const [stage, setStage] = useState("setup"); // setup | draft
+  const [teams, setTeams] = useState(
+    DEFAULT_TEAM_NAMES.map((name, i) => ({ id: i, name }))
+  );
+  const [order, setOrder] = useState(DEFAULT_TEAM_NAMES.map((_, i) => i));
+  const [keepers, setKeepers] = useState([]); // {playerId, teamId, cost}
+  const [potentialKeepers, setPotentialKeepers] = useState([]); // {playerId, teamId, cost}
+  const [picks, setPicks] = useState([]); // {playerId, teamId, cost, pickNum}
+  const [players, setPlayers] = useState(() => computeRankings(DEFAULT_BASE));
+  const [projMsg, setProjMsg] = useState("");
+  const [myTeamId, setMyTeamId] = useState(null);
+
+  const saveTimer = useRef(null);
+
+  // load persisted state once (same-browser convenience autosave)
+  useEffect(() => {
+    (async () => {
+      const saved = await loadState();
+      if (saved) {
+        setStage(saved.stage || "setup");
+        if (saved.teams) setTeams(saved.teams);
+        if (saved.order) setOrder(saved.order);
+        if (saved.keepers) setKeepers(saved.keepers);
+        if (saved.potentialKeepers) setPotentialKeepers(saved.potentialKeepers);
+        if (saved.picks) setPicks(saved.picks);
+        if (saved.playerBase) setPlayers(computeRankings(saved.playerBase));
+        if (saved.myTeamId !== undefined) setMyTeamId(saved.myTeamId);
+      }
+      setReady(true);
+    })();
+    // eslint-disable-next-line
+  }, []);
+
+  // debounce-save whenever anything changes
+  useEffect(() => {
+    if (!ready) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      saveState({
+        stage,
+        teams,
+        order,
+        keepers,
+        potentialKeepers,
+        picks,
+        playerBase: players.map((p) => ({ name: p.name, position: p.position, points: p.points })),
+        myTeamId,
+      });
+    }, 300);
+    return () => clearTimeout(saveTimer.current);
+  }, [ready, stage, teams, order, keepers, potentialKeepers, picks, players, myTeamId]);
+
+  const handleUpdateProjections = useCallback(
+    (file) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const rows = parseCSV(String(e.target.result));
+          if (rows.length === 0) {
+            setProjMsg("Couldn't find any data rows in that file.");
+            return;
+          }
+          const headers = Object.keys(rows[0]);
+          const playerKey = headers.find((h) => h.includes("player") || h === "name");
+          const pointsKey = headers.find((h) => h.includes("point"));
+          const positionKey = headers.find((h) => h.includes("position") || h === "pos");
+          if (!playerKey || !pointsKey) {
+            setProjMsg('Need a column with "player" in the header and one with "points".');
+            return;
+          }
+          const draftedIds = new Set([...picks.map((p) => p.playerId), ...keepers.map((k) => k.playerId)]);
+          const knownNames = new Set(players.map((p) => p.name));
+          const csvNames = new Set(); // every name that appeared in the upload
+          const updates = {}; // name -> points, for players already in the pool
+          const newPlayers = []; // {name, position, points} for names not yet in the pool
+          const seenNew = new Set();
+          let skippedNoPosition = 0;
+
+          rows.forEach((r) => {
+            const name = (r[playerKey] || "").trim();
+            const pts = parseFloat(r[pointsKey]);
+            if (!name || !Number.isFinite(pts)) return;
+            csvNames.add(name);
+            if (knownNames.has(name)) {
+              updates[name] = pts;
+              return;
+            }
+            const rawPos = positionKey ? (r[positionKey] || "").trim().toUpperCase() : "";
+            if (POSITIONS.includes(rawPos)) {
+              if (!seenNew.has(name)) {
+                seenNew.add(name);
+                newPlayers.push({ name, position: rawPos, points: pts });
+              }
+            } else {
+              skippedNoPosition++;
+            }
+          });
+
+          // Full replace: anyone not in the new file gets dropped from the pool —
+          // except a player who's already been kept or drafted, since removing
+          // them would corrupt existing rosters/picks that reference them.
+          let removed = 0;
+          let keptAnyway = 0;
+          const base = [];
+          players.forEach((p) => {
+            if (csvNames.has(p.name)) {
+              base.push({
+                name: p.name,
+                position: p.position,
+                points: Object.prototype.hasOwnProperty.call(updates, p.name) ? updates[p.name] : p.points,
+              });
+            } else if (draftedIds.has(p.id)) {
+              keptAnyway++;
+              base.push({ name: p.name, position: p.position, points: p.points });
+            } else {
+              removed++;
+            }
+          });
+          base.push(...newPlayers);
+
+          setPlayers(computeRankings(base));
+
+          const matched = Object.keys(updates).length;
+          let msg = `Updated ${matched} player${matched === 1 ? "" : "s"}.`;
+          if (newPlayers.length > 0) {
+            msg += ` Added ${newPlayers.length} new player${newPlayers.length === 1 ? "" : "s"}.`;
+          }
+          if (removed > 0) {
+            msg += ` Removed ${removed} player${removed === 1 ? "" : "s"} not on the new list.`;
+          }
+          if (keptAnyway > 0) {
+            msg += ` Kept ${keptAnyway} already-drafted player${
+              keptAnyway === 1 ? "" : "s"
+            } that weren't on the new list — can't drop a player once they're rostered.`;
+          }
+          if (skippedNoPosition > 0) {
+            msg += ` ${skippedNoPosition} row${skippedNoPosition === 1 ? "" : "s"} couldn't be added — include a "Position" column (QB/RB/WR/TE/K/DEF) to add new players.`;
+          }
+          setProjMsg(msg);
+        } catch (err) {
+          setProjMsg("Couldn't read that file — make sure it's a CSV export.");
+        }
+      };
+      reader.readAsText(file);
+    },
+    [players, picks, keepers]
+  );
+
+  const [addPlayerMsg, setAddPlayerMsg] = useState("");
+  const handleAddCustomPlayer = useCallback(
+    (name, position) => {
+      const trimmed = name.trim();
+      if (!trimmed) {
+        setAddPlayerMsg("Enter a player name.");
+        return;
+      }
+      if (players.some((p) => p.name.toLowerCase() === trimmed.toLowerCase())) {
+        setAddPlayerMsg(`"${trimmed}" is already in the player pool.`);
+        return;
+      }
+      const base = players.map((p) => ({ name: p.name, position: p.position, points: p.points }));
+      base.push({ name: trimmed, position, points: 0 });
+      setPlayers(computeRankings(base));
+      setAddPlayerMsg(`Added ${trimmed} (${position}) at 0 projected points.`);
+    },
+    [players]
+  );
+
+  const [potentialKeeperMsg, setPotentialKeeperMsg] = useState("");
+  const handleBulkPotentialKeepers = useCallback(
+    (file) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const rows = parseCSV(String(e.target.result));
+          if (rows.length === 0) {
+            setPotentialKeeperMsg("Couldn't find any data rows in that file.");
+            return;
+          }
+          const headers = Object.keys(rows[0]);
+          const playerKey = headers.find((h) => h.includes("player") || h === "name");
+          const teamKey = headers.find((h) => h.includes("team"));
+          const costKey = headers.find((h) => h.includes("cost") || h.includes("price") || h.includes("salary"));
+          if (!playerKey || !teamKey || !costKey) {
+            setPotentialKeeperMsg('Need columns for "Player", "Team", and "Cost".');
+            return;
+          }
+          const added = [];
+          const errors = [];
+          rows.forEach((r, idx) => {
+            const name = (r[playerKey] || "").trim();
+            const teamName = (r[teamKey] || "").trim();
+            const cost = parseInt(r[costKey], 10);
+            if (!name) return;
+            const player = players.find((p) => p.name === name);
+            if (!player) {
+              errors.push(`Row ${idx + 2}: "${name}" doesn't match any player in the pool.`);
+              return;
+            }
+            const team = teams.find((t) => t.name.toLowerCase() === teamName.toLowerCase());
+            if (!team) {
+              errors.push(`Row ${idx + 2}: "${teamName}" doesn't match any team.`);
+              return;
+            }
+            if (!Number.isFinite(cost) || cost < 1) {
+              errors.push(`Row ${idx + 2}: invalid cost for "${name}".`);
+              return;
+            }
+            added.push({ playerId: player.id, teamId: team.id, cost });
+          });
+          setPotentialKeepers((prev) => [...prev, ...added]);
+          let msg = `Added ${added.length} potential keeper${added.length === 1 ? "" : "s"}.`;
+          if (errors.length > 0) {
+            msg += ` ${errors.length} row${errors.length === 1 ? "" : "s"} had errors: ${errors.slice(0, 5).join(" ")}`;
+            if (errors.length > 5) msg += ` (+${errors.length - 5} more)`;
+          }
+          setPotentialKeeperMsg(msg);
+        } catch (err) {
+          setPotentialKeeperMsg("Couldn't read that file — make sure it's a CSV export.");
+        }
+      };
+      reader.readAsText(file);
+    },
+    [players, teams]
+  );
+
+  const [keeperUploadMsg, setKeeperUploadMsg] = useState("");
+  const handleBulkKeepers = useCallback(
+    (file) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const rows = parseCSV(String(e.target.result));
+          if (rows.length === 0) {
+            setKeeperUploadMsg("Couldn't find any data rows in that file.");
+            return;
+          }
+          const headers = Object.keys(rows[0]);
+          const playerKey = headers.find((h) => h.includes("player") || h === "name");
+          const teamKey = headers.find((h) => h.includes("team"));
+          const costKey = headers.find((h) => h.includes("cost") || h.includes("price") || h.includes("salary"));
+          if (!playerKey || !teamKey || !costKey) {
+            setKeeperUploadMsg('Need columns for "Player", "Team", and "Cost".');
+            return;
+          }
+          // Running totals per team, seeded from existing keepers + picks, so
+          // budget/roster caps are enforced correctly as rows accumulate.
+          const spentByTeam = {};
+          const countByTeam = {};
+          teams.forEach((t) => {
+            spentByTeam[t.id] = 0;
+            countByTeam[t.id] = 0;
+          });
+          keepers.forEach((k) => {
+            spentByTeam[k.teamId] = (spentByTeam[k.teamId] || 0) + k.cost;
+            countByTeam[k.teamId] = (countByTeam[k.teamId] || 0) + 1;
+          });
+          picks.forEach((p) => {
+            spentByTeam[p.teamId] = (spentByTeam[p.teamId] || 0) + p.cost;
+            countByTeam[p.teamId] = (countByTeam[p.teamId] || 0) + 1;
+          });
+          const usedPlayerIds = new Set([...keepers.map((k) => k.playerId), ...picks.map((p) => p.playerId)]);
+
+          const added = [];
+          const errors = [];
+          rows.forEach((r, idx) => {
+            const name = (r[playerKey] || "").trim();
+            const teamName = (r[teamKey] || "").trim();
+            const cost = parseInt(r[costKey], 10);
+            if (!name) return;
+            const player = players.find((p) => p.name === name);
+            if (!player) {
+              errors.push(`Row ${idx + 2}: "${name}" doesn't match any player in the pool.`);
+              return;
+            }
+            if (usedPlayerIds.has(player.id)) {
+              errors.push(`Row ${idx + 2}: "${name}" is already kept or drafted.`);
+              return;
+            }
+            const team = teams.find((t) => t.name.toLowerCase() === teamName.toLowerCase());
+            if (!team) {
+              errors.push(`Row ${idx + 2}: "${teamName}" doesn't match any team.`);
+              return;
+            }
+            if (!Number.isFinite(cost) || cost < 1) {
+              errors.push(`Row ${idx + 2}: invalid cost for "${name}".`);
+              return;
+            }
+            if (countByTeam[team.id] >= ROSTER_SPOTS) {
+              errors.push(`Row ${idx + 2}: ${team.name}'s roster is already full — skipped "${name}".`);
+              return;
+            }
+            if (spentByTeam[team.id] + cost > BUDGET_PER_TEAM) {
+              errors.push(
+                `Row ${idx + 2}: ${team.name} would go over the $${BUDGET_PER_TEAM} cap — skipped "${name}".`
+              );
+              return;
+            }
+            added.push({ playerId: player.id, teamId: team.id, cost });
+            usedPlayerIds.add(player.id);
+            spentByTeam[team.id] += cost;
+            countByTeam[team.id] += 1;
+          });
+          setKeepers((prev) => [...prev, ...added]);
+          let msg = `Added ${added.length} keeper${added.length === 1 ? "" : "s"}.`;
+          if (errors.length > 0) {
+            msg += ` ${errors.length} row${errors.length === 1 ? "" : "s"} had errors: ${errors.slice(0, 5).join(" ")}`;
+            if (errors.length > 5) msg += ` (+${errors.length - 5} more)`;
+          }
+          setKeeperUploadMsg(msg);
+        } catch (err) {
+          setKeeperUploadMsg("Couldn't read that file — make sure it's a CSV export.");
+        }
+      };
+      reader.readAsText(file);
+    },
+    [players, teams, keepers, picks]
+  );
+
+  const handleSaveFile = useCallback(() => {
+    const payload = {
+      savedAt: new Date().toISOString(),
+      teams,
+      order,
+      keepers,
+      potentialKeepers,
+      picks,
+      playerBase: players.map((p) => ({ name: p.name, position: p.position, points: p.points })),
+      myTeamId,
+    };
+    downloadBlob(JSON.stringify(payload, null, 2), "dynasty-draft-save.json", "application/json");
+  }, [teams, order, keepers, potentialKeepers, picks, players, myTeamId]);
+
+  const handleLoadFile = useCallback((file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(String(e.target.result));
+        if (data.teams) setTeams(data.teams);
+        if (data.order) setOrder(data.order);
+        setKeepers(data.keepers || []);
+        setPotentialKeepers(data.potentialKeepers || []);
+        setPicks(data.picks || []);
+        if (data.playerBase) setPlayers(computeRankings(data.playerBase));
+        setMyTeamId(data.myTeamId !== undefined ? data.myTeamId : null);
+        setStage(data.picks && data.picks.length > 0 ? "draft" : "setup");
+      } catch (err) {
+        window.alert("Couldn't read that file — is it a save file from this tool?");
+      }
+    };
+    reader.readAsText(file);
+  }, []);
+
+  const handleExportResults = useCallback(() => {
+    const rows = [["Team", "Player", "Position", "Type", "Cost"]];
+    keepers.forEach((k) => {
+      const p = players.find((pp) => pp.id === k.playerId);
+      const t = teams.find((tt) => tt.id === k.teamId);
+      rows.push([t?.name || "", p?.name || "", p?.position || "", "Keeper", k.cost]);
+    });
+    picks
+      .slice()
+      .sort((a, b) => a.pickNum - b.pickNum)
+      .forEach((pk) => {
+        const p = players.find((pp) => pp.id === pk.playerId);
+        const t = teams.find((tt) => tt.id === pk.teamId);
+        rows.push([t?.name || "", p?.name || "", p?.position || "", "Draft", pk.cost]);
+      });
+    const csv = rows
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    downloadBlob(csv, "dynasty-draft-results.csv", "text/csv");
+  }, [keepers, picks, players, teams]);
+
+  const handleClearAll = useCallback(async () => {
+    setTeams(DEFAULT_TEAM_NAMES.map((name, i) => ({ id: i, name })));
+    setOrder(DEFAULT_TEAM_NAMES.map((_, i) => i));
+    setKeepers([]);
+    setPotentialKeepers([]);
+    setPicks([]);
+    setPlayers(computeRankings(DEFAULT_BASE));
+    setProjMsg("");
+    setMyTeamId(null);
+    setStage("setup");
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      /* best effort */
+    }
+  }, []);
+
+  if (!ready) {
+    return (
+      <div style={styles.loadingScreen}>
+        <div style={styles.loadingSpinner} />
+        <div style={{ color: "#8b93a7", fontSize: 14, marginTop: 12 }}>
+          Loading draft room…
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={styles.app}>
+      <GlobalStyle />
+      <UtilityBar
+        onSave={handleSaveFile}
+        onLoad={handleLoadFile}
+        onExport={handleExportResults}
+        onClearAll={handleClearAll}
+        hasResults={keepers.length > 0 || picks.length > 0}
+      />
+      {stage === "setup" ? (
+        <SetupScreen
+          teams={teams}
+          setTeams={setTeams}
+          order={order}
+          setOrder={setOrder}
+          players={players}
+          keepers={keepers}
+          setKeepers={setKeepers}
+          onBulkKeepers={handleBulkKeepers}
+          keeperUploadMsg={keeperUploadMsg}
+          potentialKeepers={potentialKeepers}
+          setPotentialKeepers={setPotentialKeepers}
+          onBulkPotentialKeepers={handleBulkPotentialKeepers}
+          potentialKeeperMsg={potentialKeeperMsg}
+          picks={picks}
+          picksExist={picks.length > 0}
+          onStart={() => setStage("draft")}
+          onResetDraft={() => setPicks([])}
+          onUpdateProjections={handleUpdateProjections}
+          projMsg={projMsg}
+        />
+      ) : (
+        <DraftScreen
+          teams={teams}
+          order={order}
+          keepers={keepers}
+          picks={picks}
+          setPicks={setPicks}
+          players={players}
+          onEditSetup={() => setStage("setup")}
+          onAddCustomPlayer={handleAddCustomPlayer}
+          addPlayerMsg={addPlayerMsg}
+          myTeamId={myTeamId}
+          setMyTeamId={setMyTeamId}
+        />
+      )}
+    </div>
+  );
+}
+
+function UtilityBar({ onSave, onLoad, onExport, onClearAll, hasResults }) {
+  const loadInputRef = useRef(null);
+  return (
+    <div style={styles.utilityBar}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#5f6779", letterSpacing: 0.5 }}>
+        DYNASTY DRAFT TOOL
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button style={styles.ghostBtnSm} onClick={onSave}>
+          Save file
+        </button>
+        <button style={styles.ghostBtnSm} onClick={() => loadInputRef.current?.click()}>
+          Load file
+        </button>
+        <input
+          ref={loadInputRef}
+          type="file"
+          accept=".json"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) onLoad(f);
+            e.target.value = "";
+          }}
+        />
+        {hasResults && (
+          <button style={styles.ghostBtnSm} onClick={onExport}>
+            Export results (CSV)
+          </button>
+        )}
+        <button
+          style={styles.dangerGhostBtnSm}
+          onClick={() => {
+            if (
+              window.confirm(
+                "Clear EVERYTHING? This wipes all teams, order, keepers, picks, and any updated projections, and resets this tool to a blank Dynasty draft. This can't be undone — save a file first if you want a backup."
+              )
+            ) {
+              onClearAll();
+            }
+          }}
+        >
+          Clear all data
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function GlobalStyle() {
+  return (
+    <style>{`
+      * { box-sizing: border-box; }
+      ::-webkit-scrollbar { width: 8px; height: 8px; }
+      ::-webkit-scrollbar-thumb { background: #333c4d; border-radius: 4px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      input, select, button { font-family: inherit; }
+      button:focus-visible, input:focus-visible, select:focus-visible {
+        outline: 2px solid #e0b34a; outline-offset: 1px;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+      }
+      @keyframes ticker-scroll {
+        from { transform: translateX(0); }
+        to { transform: translateX(-50%); }
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @media (max-width: 760px) {
+        .setup-grid { grid-template-columns: 1fr !important; }
+        .board-layout { grid-template-columns: 1fr !important; }
+        .clock-bar { flex-direction: column; align-items: flex-start !important; }
+        .clock-stats { gap: 16px !important; }
+      }
+    `}</style>
+  );
+}
+
+/* ---------------------------------------------------------
+   SETUP SCREEN
+---------------------------------------------------------- */
+function SetupScreen({
+  teams,
+  setTeams,
+  order,
+  setOrder,
+  players,
+  keepers,
+  setKeepers,
+  onBulkKeepers,
+  keeperUploadMsg,
+  potentialKeepers,
+  setPotentialKeepers,
+  onBulkPotentialKeepers,
+  potentialKeeperMsg,
+  picks,
+  picksExist,
+  onStart,
+  onResetDraft,
+  onUpdateProjections,
+  projMsg,
+}) {
+  const renameTeam = (id, name) => {
+    setTeams(teams.map((t) => (t.id === id ? { ...t, name } : t)));
+  };
+
+  const moveInOrder = (idx, dir) => {
+    const next = [...order];
+    const swap = idx + dir;
+    if (swap < 0 || swap >= next.length) return;
+    [next[idx], next[swap]] = [next[swap], next[idx]];
+    setOrder(next);
+  };
+
+  const shuffle = () => {
+    const next = [...order];
+    for (let i = next.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [next[i], next[j]] = [next[j], next[i]];
+    }
+    setOrder(next);
+  };
+
+  const [dragIndex, setDragIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+  const handleDragStart = (idx) => (e) => {
+    setDragIndex(idx);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleDragOver = (idx) => (e) => {
+    e.preventDefault();
+    if (idx !== dragOverIndex) setDragOverIndex(idx);
+  };
+  const handleDrop = (idx) => (e) => {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === idx) {
+      setDragIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+    const next = [...order];
+    const [moved] = next.splice(dragIndex, 1);
+    next.splice(idx, 0, moved);
+    setOrder(next);
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
+  const handleDragEnd = () => {
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const teamById = (id) => teams.find((t) => t.id === id);
+
+  // ---- Keepers ----
+  const [keeperQuery, setKeeperQuery] = useState("");
+  const [keeperPlayerId, setKeeperPlayerId] = useState(null);
+  const [keeperTeamId, setKeeperTeamId] = useState(order[0] ?? teams[0]?.id ?? null);
+  const [keeperCost, setKeeperCost] = useState("");
+  const [keeperError, setKeeperError] = useState("");
+
+  const lockedIds = useMemo(() => {
+    const s = new Set(keepers.map((k) => k.playerId));
+    picks.forEach((p) => s.add(p.playerId));
+    return s;
+  }, [keepers, picks]);
+
+  const keeperResults = useMemo(() => {
+    if (!keeperQuery.trim()) return [];
+    const q = keeperQuery.trim().toLowerCase();
+    return players.filter((p) => !lockedIds.has(p.id) && p.name.toLowerCase().includes(q)).slice(0, 8);
+  }, [keeperQuery, players, lockedIds]);
+
+  const keeperSpent = (teamId) =>
+    keepers.filter((k) => k.teamId === teamId).reduce((s, k) => s + k.cost, 0) +
+    picks.filter((p) => p.teamId === teamId).reduce((s, p) => s + p.cost, 0);
+  const keeperCount = (teamId) =>
+    keepers.filter((k) => k.teamId === teamId).length + picks.filter((p) => p.teamId === teamId).length;
+
+  const addKeeper = () => {
+    setKeeperError("");
+    if (keeperPlayerId === null) {
+      setKeeperError("Search for and select a player first.");
+      return;
+    }
+    if (keeperTeamId === null) {
+      setKeeperError("Choose which team kept them.");
+      return;
+    }
+    const cost = parseInt(keeperCost, 10);
+    if (!Number.isFinite(cost) || cost < 1) {
+      setKeeperError("Enter a keeper cost of at least $1.");
+      return;
+    }
+    if (keeperCount(keeperTeamId) >= ROSTER_SPOTS) {
+      setKeeperError(`${teamById(keeperTeamId)?.name}'s roster is already full.`);
+      return;
+    }
+    if (keeperSpent(keeperTeamId) + cost > BUDGET_PER_TEAM) {
+      setKeeperError(
+        `That puts ${teamById(keeperTeamId)?.name} over the $${BUDGET_PER_TEAM} cap (already committed $${keeperSpent(
+          keeperTeamId
+        )}).`
+      );
+      return;
+    }
+    setKeepers([...keepers, { playerId: keeperPlayerId, teamId: keeperTeamId, cost }]);
+    setKeeperPlayerId(null);
+    setKeeperQuery("");
+    setKeeperCost("");
+  };
+
+  const removeKeeper = (idx) => {
+    setKeepers(keepers.filter((_, i) => i !== idx));
+  };
+  const keeperCsvInputRef = useRef(null);
+
+  // ---- Potential keepers (staging area — doesn't count against budget/roster
+  // until promoted into the real Keepers list below) ----
+  const [potQuery, setPotQuery] = useState("");
+  const [potPlayerId, setPotPlayerId] = useState(null);
+  const [potTeamId, setPotTeamId] = useState(order[0] ?? teams[0]?.id ?? null);
+  const [potCost, setPotCost] = useState("");
+  const [potError, setPotError] = useState("");
+  const potCsvInputRef = useRef(null);
+
+  const potLockedIds = useMemo(() => {
+    const s = new Set(lockedIds);
+    potentialKeepers.forEach((pk) => s.add(pk.playerId));
+    return s;
+  }, [lockedIds, potentialKeepers]);
+
+  const potResults = useMemo(() => {
+    if (!potQuery.trim()) return [];
+    const q = potQuery.trim().toLowerCase();
+    return players.filter((p) => !potLockedIds.has(p.id) && p.name.toLowerCase().includes(q)).slice(0, 8);
+  }, [potQuery, players, potLockedIds]);
+
+  const addPotentialKeeper = () => {
+    setPotError("");
+    if (potPlayerId === null) {
+      setPotError("Search for and select a player first.");
+      return;
+    }
+    if (potTeamId === null) {
+      setPotError("Choose which team might keep them.");
+      return;
+    }
+    const cost = parseInt(potCost, 10);
+    if (!Number.isFinite(cost) || cost < 1) {
+      setPotError("Enter a keeper cost of at least $1.");
+      return;
+    }
+    setPotentialKeepers([...potentialKeepers, { playerId: potPlayerId, teamId: potTeamId, cost }]);
+    setPotPlayerId(null);
+    setPotQuery("");
+    setPotCost("");
+  };
+
+  const removePotentialKeeper = (idx) => {
+    setPotentialKeepers(potentialKeepers.filter((_, i) => i !== idx));
+  };
+
+  const promoteToKeeper = (idx) => {
+    const pk = potentialKeepers[idx];
+    setPotError("");
+    if (keeperCount(pk.teamId) >= ROSTER_SPOTS) {
+      setPotError(`${teamById(pk.teamId)?.name}'s roster is already full — can't keep this one too.`);
+      return;
+    }
+    if (keeperSpent(pk.teamId) + pk.cost > BUDGET_PER_TEAM) {
+      setPotError(
+        `Keeping this would put ${teamById(pk.teamId)?.name} over the $${BUDGET_PER_TEAM} cap (already committed $${keeperSpent(
+          pk.teamId
+        )}).`
+      );
+      return;
+    }
+    setKeepers([...keepers, { playerId: pk.playerId, teamId: pk.teamId, cost: pk.cost }]);
+    setPotentialKeepers(potentialKeepers.filter((_, i) => i !== idx));
+  };
+
+  // ---- Projections update ----
+  const projInputRef = useRef(null);
+
+  return (
+    <div style={styles.setupWrap}>
+      <div style={styles.setupHeader}>
+        <div style={{ ...styles.eyebrow }}>DYNASTY LEAGUE · AUCTION DRAFT</div>
+        <h1 style={styles.h1}>Set the room before the clock starts</h1>
+        <p style={{ color: "#8b93a7", fontSize: 15, maxWidth: 560, lineHeight: 1.5 }}>
+          Confirm your 12 teams, nomination order, and any keepers already locked
+          in. $250 cap per team, 17 roster spots.
+        </p>
+      </div>
+
+      <section style={styles.panel}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={styles.panelTitle}>Teams & nomination order</div>
+          <button style={styles.ghostBtnSm} onClick={shuffle}>
+            Shuffle order
+          </button>
+        </div>
+        <p style={{ color: "#7d8599", fontSize: 12.5, marginTop: -4, marginBottom: 8 }}>
+          Drag a row to reorder, use the arrows, or rename a team right in its row.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {order.map((teamId, idx) => (
+            <div
+              key={teamId}
+              draggable
+              onDragStart={handleDragStart(idx)}
+              onDragOver={handleDragOver(idx)}
+              onDrop={handleDrop(idx)}
+              onDragEnd={handleDragEnd}
+              style={{
+                ...styles.orderRow,
+                opacity: dragIndex === idx ? 0.35 : 1,
+                border: dragOverIndex === idx && dragIndex !== idx ? "1px solid #e0b34a" : "1px solid #232a38",
+              }}
+            >
+              <span style={styles.dragHandle} title="Drag to reorder">
+                ⠿
+              </span>
+              <span style={styles.orderNum}>{idx + 1}</span>
+              <input
+                value={teamById(teamId)?.name ?? ""}
+                onChange={(e) => renameTeam(teamId, e.target.value)}
+                size={Math.max(3, (teamById(teamId)?.name ?? "").length)}
+                style={styles.teamNameInputInline}
+              />
+              <div style={{ flex: 1 }} />
+              <button
+                aria-label="Move up"
+                draggable={false}
+                style={styles.orderArrow}
+                onClick={() => moveInOrder(idx, -1)}
+                disabled={idx === 0}
+              >
+                ↑
+              </button>
+              <button
+                aria-label="Move down"
+                draggable={false}
+                style={styles.orderArrow}
+                onClick={() => moveInOrder(idx, 1)}
+                disabled={idx === order.length - 1}
+              >
+                ↓
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Potential keepers */}
+      <section style={{ ...styles.panel, marginTop: 16 }}>
+        <div style={styles.panelTitle}>Potential keepers ({potentialKeepers.length})</div>
+        <p style={{ color: "#7d8599", fontSize: 13, marginTop: -4, marginBottom: 10 }}>
+          Stage every player who's eligible to be kept here first — nothing here counts
+          against a team's budget or roster spots yet. Keep Value is modeled auction
+          value minus the keeper cost — green means a bargain, red means overpaying.
+          When you've decided, click "Keep" to move a candidate into the real Keepers
+          list below.
+        </p>
+
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+          <div style={{ position: "relative", flex: "1 1 220px", minWidth: 200 }}>
+            <input
+              placeholder="Search player…"
+              value={potQuery}
+              onChange={(e) => {
+                setPotQuery(e.target.value);
+                setPotPlayerId(null);
+              }}
+              style={styles.nomInput}
+            />
+            {potQuery && potResults.length > 0 && potPlayerId === null && (
+              <div style={styles.searchDropdown}>
+                {potResults.map((p) => (
+                  <div
+                    key={p.id}
+                    style={styles.searchResultRow}
+                    onClick={() => {
+                      setPotPlayerId(p.id);
+                      setPotQuery(p.name);
+                    }}
+                  >
+                    <PosPill pos={p.position} />
+                    <span style={{ flex: 1 }}>{p.name}</span>
+                    <span style={{ color: "#8b93a7", fontSize: 12 }}>Val {fmtMoney(p.auctionValue)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <select
+            value={potTeamId ?? ""}
+            onChange={(e) => setPotTeamId(parseInt(e.target.value, 10))}
+            style={styles.nomSelect}
+          >
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            placeholder="Cost $"
+            value={potCost}
+            onChange={(e) => setPotCost(e.target.value)}
+            style={{ ...styles.nomInput, maxWidth: 100, flex: "0 0 100px" }}
+          />
+          <button style={styles.primaryBtn} onClick={addPotentialKeeper}>
+            Add candidate
+          </button>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+          <button style={styles.ghostBtnSm} onClick={() => potCsvInputRef.current?.click()}>
+            Upload CSV of candidates
+          </button>
+          <input
+            ref={potCsvInputRef}
+            type="file"
+            accept=".csv"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onBulkPotentialKeepers(f);
+              e.target.value = "";
+            }}
+          />
+          <span style={{ fontSize: 12, color: "#5f6779" }}>Columns: Player, Team, Cost</span>
+        </div>
+        {potentialKeeperMsg && <div style={{ fontSize: 12.5, color: "#8b93a7", marginBottom: 8 }}>{potentialKeeperMsg}</div>}
+        {potError && <div style={styles.errorBox}>{potError}</div>}
+
+        {potentialKeepers.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {potentialKeepers.map((pk, idx) => {
+              const p = players.find((pp) => pp.id === pk.playerId);
+              const t = teamById(pk.teamId);
+              const keepValue = p ? p.auctionValue - pk.cost : 0;
+              return (
+                <div key={idx} style={styles.keeperRow}>
+                  <PosPill pos={p?.position} />
+                  <span style={{ flex: 1, fontSize: 13, marginLeft: 8 }}>{p?.name}</span>
+                  <span style={{ fontSize: 12.5, color: "#8b93a7", marginRight: 10 }}>{t?.name}</span>
+                  <span style={styles.mono}>{fmtMoney(pk.cost)}</span>
+                  <span
+                    style={{
+                      ...styles.mono,
+                      marginLeft: 8,
+                      color: keepValue >= 0 ? "#5fd685" : "#e46a5c",
+                      minWidth: 56,
+                      textAlign: "right",
+                    }}
+                    title="Modeled auction value minus keeper cost"
+                  >
+                    {keepValue >= 0 ? "+" : ""}
+                    {fmtMoney(keepValue)}
+                  </span>
+                  <button style={styles.keepPromoteBtn} onClick={() => promoteToKeeper(idx)}>
+                    Keep
+                  </button>
+                  <button style={styles.removeBtn} onClick={() => removePotentialKeeper(idx)} aria-label="Remove candidate">
+                    ×
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Keepers */}
+      <section style={{ ...styles.panel, marginTop: 16 }}>
+        <div style={styles.panelTitle}>Keepers ({keepers.length})</div>
+        <p style={{ color: "#7d8599", fontSize: 13, marginTop: -4, marginBottom: 10 }}>
+          Enter every player already kept before the auction starts — they'll be pulled
+          out of the pool and charged against that team's budget and roster spots.
+        </p>
+
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+          <div style={{ position: "relative", flex: "1 1 220px", minWidth: 200 }}>
+            <input
+              placeholder="Search player…"
+              value={keeperQuery}
+              onChange={(e) => {
+                setKeeperQuery(e.target.value);
+                setKeeperPlayerId(null);
+              }}
+              style={styles.nomInput}
+            />
+            {keeperQuery && keeperResults.length > 0 && keeperPlayerId === null && (
+              <div style={styles.searchDropdown}>
+                {keeperResults.map((p) => (
+                  <div
+                    key={p.id}
+                    style={styles.searchResultRow}
+                    onClick={() => {
+                      setKeeperPlayerId(p.id);
+                      setKeeperQuery(p.name);
+                    }}
+                  >
+                    <PosPill pos={p.position} />
+                    <span style={{ flex: 1 }}>{p.name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <select
+            value={keeperTeamId ?? ""}
+            onChange={(e) => setKeeperTeamId(parseInt(e.target.value, 10))}
+            style={styles.nomSelect}
+          >
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            placeholder="Cost $"
+            value={keeperCost}
+            onChange={(e) => setKeeperCost(e.target.value)}
+            style={{ ...styles.nomInput, maxWidth: 100, flex: "0 0 100px" }}
+          />
+          <button style={styles.primaryBtn} onClick={addKeeper}>
+            Add keeper
+          </button>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+          <button style={styles.ghostBtnSm} onClick={() => keeperCsvInputRef.current?.click()}>
+            Upload CSV of keepers
+          </button>
+          <input
+            ref={keeperCsvInputRef}
+            type="file"
+            accept=".csv"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onBulkKeepers(f);
+              e.target.value = "";
+            }}
+          />
+          <span style={{ fontSize: 12, color: "#5f6779" }}>Columns: Player, Team, Cost</span>
+        </div>
+        {keeperUploadMsg && <div style={{ fontSize: 12.5, color: "#8b93a7", marginBottom: 8 }}>{keeperUploadMsg}</div>}
+        {keeperError && <div style={styles.errorBox}>{keeperError}</div>}
+
+        {keepers.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {keepers.map((k, idx) => {
+              const p = players.find((pp) => pp.id === k.playerId);
+              const t = teamById(k.teamId);
+              return (
+                <div key={idx} style={styles.keeperRow}>
+                  <PosPill pos={p?.position} />
+                  <span style={{ flex: 1, fontSize: 13, marginLeft: 8 }}>{p?.name}</span>
+                  <span style={{ fontSize: 12.5, color: "#8b93a7", marginRight: 10 }}>{t?.name}</span>
+                  <span style={styles.mono}>{fmtMoney(k.cost)}</span>
+                  <button style={styles.removeBtn} onClick={() => removeKeeper(idx)} aria-label="Remove keeper">
+                    ×
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Projections update */}
+      <section style={{ ...styles.panel, marginTop: 16 }}>
+        <div style={styles.panelTitle}>Update projections</div>
+        <p style={{ color: "#7d8599", fontSize: 13, marginTop: -4, marginBottom: 10 }}>
+          This fully replaces the player pool with your upload — export a CSV from the
+          workbook with "Player", "Position", and "Points" columns (names need to match
+          exactly, e.g. "Josh Allen BUF"). Names already in the pool get their points
+          updated, new names get added, and anyone from the current pool who isn't in
+          your file gets removed — except a player already drafted or kept, since
+          dropping them mid-draft would break your rosters. Uploading recomputes VBD,
+          tiers, auction values, and scarcity for the whole pool.
+        </p>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <button style={styles.ghostBtnSm} onClick={() => projInputRef.current?.click()}>
+            Choose CSV file
+          </button>
+          <input
+            ref={projInputRef}
+            type="file"
+            accept=".csv"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onUpdateProjections(f);
+              e.target.value = "";
+            }}
+          />
+          {projMsg && <span style={{ fontSize: 12.5, color: "#8b93a7" }}>{projMsg}</span>}
+        </div>
+      </section>
+
+      <div style={{ display: "flex", gap: 12, marginTop: 24, alignItems: "center", flexWrap: "wrap" }}>
+        <button style={styles.primaryBtn} onClick={onStart}>
+          {picksExist ? "Return to draft" : "Start the draft"}
+        </button>
+        {picksExist && (
+          <button
+            style={styles.dangerGhostBtn}
+            onClick={() => {
+              if (window.confirm("Clear all live draft picks and start over? Keepers, team names, and order stay.")) {
+                onResetDraft();
+              }
+            }}
+          >
+            Reset live picks
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   DRAFT SCREEN
+---------------------------------------------------------- */
+function DraftScreen({
+  teams,
+  order,
+  keepers,
+  picks,
+  setPicks,
+  players,
+  onEditSetup,
+  onAddCustomPlayer,
+  addPlayerMsg,
+  myTeamId,
+  setMyTeamId,
+}) {
+  const [view, setView] = useState("board"); // board | rosters
+  const [posFilter, setPosFilter] = useState(() => new Set());
+  const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState("auction");
+  const [nomPlayerId, setNomPlayerId] = useState(null);
+  const [nomTeamId, setNomTeamId] = useState(null);
+  const [nomBid, setNomBid] = useState("");
+  const [error, setError] = useState("");
+  const [playerQuery, setPlayerQuery] = useState("");
+  const [highlightIndex, setHighlightIndex] = useState(0);
+  const teamSelectRef = useRef(null);
+  const bidInputRef = useRef(null);
+  const [showAddPlayer, setShowAddPlayer] = useState(false);
+  const [addName, setAddName] = useState("");
+  const [addPos, setAddPos] = useState("RB");
+
+  const myTeamEntries = useMemo(() => {
+    if (myTeamId === null) return [];
+    return [...keepers.filter((k) => k.teamId === myTeamId), ...picks.filter((p) => p.teamId === myTeamId)];
+  }, [myTeamId, keepers, picks]);
+
+  const myTeamLineup = useMemo(() => {
+    if (myTeamId === null) return null;
+    return buildLineup(myTeamEntries, players, ROSTER_REQUIREMENTS);
+  }, [myTeamId, myTeamEntries, players]);
+
+  // Need multiplier: how much this team should prioritize a position right now,
+  // based on which of their own roster slots are still open.
+  const needMultiplier = (position) => {
+    if (!myTeamLineup) return 1;
+    const hardSlots = myTeamLineup.slots.filter(
+      (s) => s.label.startsWith(position) && !s.label.startsWith("FLEX") && !s.label.startsWith("SFLX")
+    );
+    if (hardSlots.some((s) => !s.entry)) return 1.25;
+    const flexEligible = SUPERFLEX_ELIGIBLE.includes(position);
+    if (flexEligible) {
+      const flexSlots = myTeamLineup.slots.filter((s) => s.label.startsWith("SFLX"));
+      if (flexSlots.some((s) => !s.entry)) return 1.1;
+    }
+    const capacity = (ROSTER_REQUIREMENTS[position] || 0) + (flexEligible ? ROSTER_REQUIREMENTS.SUPERFLEX || 0 : 0);
+    const countAtPos = myTeamEntries.filter((e) => {
+      const p = players.find((pp) => pp.id === e.playerId);
+      return p && p.position === position;
+    }).length;
+    if (countAtPos > capacity + 2) return 0.85;
+    return 1;
+  };
+
+  const myBudgetLeft = useMemo(() => {
+    if (myTeamId === null) return null;
+    return BUDGET_PER_TEAM - myTeamEntries.reduce((s, e) => s + e.cost, 0);
+  }, [myTeamId, myTeamEntries]);
+
+  const myMaxAffordable = useMemo(() => {
+    if (myTeamId === null) return null;
+    const spotsLeft = ROSTER_SPOTS - myTeamEntries.length;
+    if (spotsLeft <= 0) return 0;
+    return myBudgetLeft - (spotsLeft - 1);
+  }, [myTeamId, myTeamEntries, myBudgetLeft]);
+
+  useEffect(() => {
+    if (myTeamId !== null) setSortKey("personal");
+  }, [myTeamId]);
+
+  const draftedIds = useMemo(() => {
+    const s = new Set(picks.map((p) => p.playerId));
+    keepers.forEach((k) => s.add(k.playerId));
+    return s;
+  }, [picks, keepers]);
+
+  const spentByTeam = useMemo(() => {
+    const m = {};
+    teams.forEach((t) => (m[t.id] = 0));
+    keepers.forEach((k) => (m[k.teamId] = (m[k.teamId] || 0) + k.cost));
+    picks.forEach((p) => (m[p.teamId] = (m[p.teamId] || 0) + p.cost));
+    return m;
+  }, [picks, keepers, teams]);
+
+  const countByTeam = useMemo(() => {
+    const m = {};
+    teams.forEach((t) => (m[t.id] = 0));
+    keepers.forEach((k) => (m[k.teamId] = (m[k.teamId] || 0) + 1));
+    picks.forEach((p) => (m[p.teamId] = (m[p.teamId] || 0) + 1));
+    return m;
+  }, [picks, keepers, teams]);
+
+  const budgetRemaining = (teamId) => BUDGET_PER_TEAM - (spentByTeam[teamId] || 0);
+  const spotsRemaining = (teamId) => ROSTER_SPOTS - (countByTeam[teamId] || 0);
+  const maxAffordableBid = (teamId) => {
+    const spots = spotsRemaining(teamId);
+    if (spots <= 0) return 0;
+    return budgetRemaining(teamId) - (spots - 1);
+  };
+
+  const nominatorIdx = picks.length % order.length;
+  const nominatorTeamId = order[nominatorIdx];
+  const nominatorTeam = teams.find((t) => t.id === nominatorTeamId);
+
+  useEffect(() => {
+    if (nomTeamId === null) setNomTeamId(nominatorTeamId);
+  }, [nominatorTeamId, nomTeamId]);
+
+  const availablePlayers = useMemo(
+    () => players.filter((p) => !draftedIds.has(p.id)),
+    [draftedIds]
+  );
+
+  const boardPlayers = useMemo(() => {
+    let list = availablePlayers;
+    if (posFilter.size > 0) list = list.filter((p) => posFilter.has(p.position));
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((p) => p.name.toLowerCase().includes(q));
+    }
+    // When a team is selected, enrich each row with need-adjusted numbers —
+    // the underlying players array stays pure market data (used elsewhere,
+    // e.g. Draft Analysis for every team), this is purely a display/sort layer.
+    if (myTeamId !== null) {
+      list = list.map((p) => {
+        const mult = needMultiplier(p.position);
+        const cap = myMaxAffordable === null ? Infinity : myMaxAffordable;
+        const personalValue = Math.max(1, Math.min(Math.round(p.auctionValue * mult), cap));
+        const personalMaxBid = Math.max(personalValue, Math.min(Math.round(p.maxBid * mult), cap));
+        return { ...p, needMult: mult, personalScore: p.scarcity * mult, personalValue, personalMaxBid };
+      });
+    }
+    const sorters = {
+      scarcity: (a, b) => b.scarcity - a.scarcity,
+      personal: (a, b) => b.personalScore - a.personalScore,
+      auction: (a, b) => b.auctionValue - a.auctionValue,
+      points: (a, b) => b.points - a.points,
+      vbd: (a, b) => b.vbd - a.vbd,
+      name: (a, b) => a.name.localeCompare(b.name),
+    };
+    return [...list].sort(sorters[sortKey] || sorters.auction);
+  }, [availablePlayers, posFilter, search, sortKey, myTeamId, myMaxAffordable, myTeamLineup]);
+
+  const togglePosition = (pos) => {
+    setPosFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(pos)) next.delete(pos);
+      else next.add(pos);
+      return next;
+    });
+  };
+
+  const toggleGroup = (group) => {
+    setPosFilter((prev) => {
+      const allIn = group.every((p) => prev.has(p));
+      const next = new Set(prev);
+      group.forEach((p) => (allIn ? next.delete(p) : next.add(p)));
+      return next;
+    });
+  };
+
+
+  const topByPosition = useMemo(() => {
+    const out = {};
+    POSITIONS.forEach((pos) => {
+      out[pos] = availablePlayers
+        .filter((p) => p.position === pos)
+        .sort((a, b) => b.scarcity - a.scarcity)
+        .slice(0, 3);
+    });
+    return out;
+  }, [availablePlayers]);
+
+  const playerSearchResults = useMemo(() => {
+    if (!playerQuery.trim()) return [];
+    const q = playerQuery.trim().toLowerCase();
+    return availablePlayers
+      .filter((p) => p.name.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [playerQuery, availablePlayers]);
+
+  useEffect(() => {
+    setHighlightIndex(0);
+  }, [playerQuery]);
+
+  const selectedNomPlayer = players.find((p) => p.id === nomPlayerId);
+
+  const pickPlayer = (p) => {
+    setNomPlayerId(p.id);
+    setPlayerQuery(p.name);
+    setError("");
+  };
+
+  const handleSearchKeyDown = (e) => {
+    if (e.key === "ArrowDown") {
+      if (playerSearchResults.length === 0) return;
+      e.preventDefault();
+      setHighlightIndex((i) => Math.min(i + 1, playerSearchResults.length - 1));
+    } else if (e.key === "ArrowUp") {
+      if (playerSearchResults.length === 0) return;
+      e.preventDefault();
+      setHighlightIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      if (playerSearchResults.length > 0 && nomPlayerId === null) {
+        e.preventDefault();
+        const chosen = playerSearchResults[highlightIndex] || playerSearchResults[0];
+        if (chosen) pickPlayer(chosen);
+      }
+    } else if (e.key === "Tab") {
+      // Tab both selects the highlighted candidate AND moves on to the team
+      // dropdown in one press — no need to hit Enter first, then Tab again.
+      if (playerSearchResults.length > 0 && nomPlayerId === null) {
+        e.preventDefault();
+        const chosen = playerSearchResults[highlightIndex] || playerSearchResults[0];
+        if (chosen) pickPlayer(chosen);
+        teamSelectRef.current?.focus();
+      }
+    }
+  };
+
+  const submitPick = () => {
+    setError("");
+    if (nomPlayerId === null) {
+      setError("Pick a player to nominate.");
+      return;
+    }
+    if (draftedIds.has(nomPlayerId)) {
+      setError("That player is already drafted.");
+      return;
+    }
+    if (nomTeamId === null) {
+      setError("Choose the winning team.");
+      return;
+    }
+    const bid = parseInt(nomBid, 10);
+    if (!Number.isFinite(bid) || bid < 1) {
+      setError("Enter a winning bid of at least $1.");
+      return;
+    }
+    if (spotsRemaining(nomTeamId) <= 0) {
+      setError(`${teams.find((t) => t.id === nomTeamId)?.name}'s roster is already full (${ROSTER_SPOTS} spots).`);
+      return;
+    }
+    const maxBid = maxAffordableBid(nomTeamId);
+    if (bid > maxBid) {
+      setError(
+        `That's more than ${teams.find((t) => t.id === nomTeamId)?.name} can bid — max is ${fmtMoney(
+          maxBid
+        )} (must leave $1 for each remaining roster spot).`
+      );
+      return;
+    }
+    const newPick = {
+      playerId: nomPlayerId,
+      teamId: nomTeamId,
+      cost: bid,
+      pickNum: picks.length + 1,
+    };
+    setPicks([...picks, newPick]);
+    setNomPlayerId(null);
+    setPlayerQuery("");
+    setNomBid("");
+    setNomTeamId(order[(picks.length + 1) % order.length]);
+  };
+
+  const undoLast = () => {
+    if (picks.length === 0) return;
+    setPicks(picks.slice(0, -1));
+  };
+
+  const recentPicks = [...picks].slice(-order.length).reverse();
+
+  return (
+    <div style={styles.draftWrap}>
+      {/* Top bar */}
+      <div style={styles.topBar}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+          <div style={styles.eyebrowSmall}>DYNASTY DRAFT</div>
+          <div style={{ fontSize: 13, color: "#8b93a7" }}>
+            Pick {picks.length + 1} · {teams.length} teams · ${BUDGET_PER_TEAM} cap
+            {keepers.length > 0 ? ` · ${keepers.length} keeper${keepers.length === 1 ? "" : "s"} locked in` : ""}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={styles.ghostBtnSm} onClick={undoLast} disabled={picks.length === 0}>
+            Undo last pick
+          </button>
+          <button style={styles.ghostBtnSm} onClick={onEditSetup}>
+            Edit setup
+          </button>
+        </div>
+      </div>
+
+      <div style={styles.myTeamBar}>
+        <span style={{ fontSize: 12.5, color: "#8b93a7", fontWeight: 600 }}>My team:</span>
+        <select
+          value={myTeamId ?? ""}
+          onChange={(e) => setMyTeamId(e.target.value === "" ? null : parseInt(e.target.value, 10))}
+          style={styles.nomSelect}
+        >
+          <option value="">— Not set —</option>
+          {teams.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+        {myTeamId !== null && (
+          <span style={{ fontSize: 12.5, color: "#7d8599" }}>
+            Board's sorted and priced for your remaining needs — {fmtMoney(myBudgetLeft)} left,{" "}
+            {ROSTER_SPOTS - myTeamEntries.length} spots to fill.
+          </span>
+        )}
+      </div>
+
+      {/* On the clock */}
+      <div className="clock-bar" style={styles.clockBar}>
+        <div>
+          <div style={{ fontSize: 12, color: "#7d8599", letterSpacing: 0.5, textTransform: "uppercase" }}>
+            On the clock to nominate
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "#f4c95d" }}>{nominatorTeam?.name}</div>
+        </div>
+        <div className="clock-stats" style={styles.clockStats}>
+          <ClockStat label="Budget left" value={fmtMoney(budgetRemaining(nominatorTeamId))} />
+          <ClockStat label="Spots left" value={spotsRemaining(nominatorTeamId)} />
+          <ClockStat label="Max bid" value={fmtMoney(Math.max(0, maxAffordableBid(nominatorTeamId)))} />
+        </div>
+      </div>
+
+      {/* Ticker */}
+      {recentPicks.length > 0 && <Ticker picks={picks} players={players} teams={teams} limit={order.length} />}
+
+      {/* Nomination panel */}
+      <div style={styles.nomPanel}>
+        <div style={{ position: "relative", flex: "1 1 240px", minWidth: 220 }}>
+          <input
+            placeholder="Search player to nominate…"
+            value={playerQuery}
+            onChange={(e) => {
+              setPlayerQuery(e.target.value);
+              setNomPlayerId(null);
+            }}
+            onKeyDown={handleSearchKeyDown}
+            style={styles.nomInput}
+          />
+          {playerQuery && playerSearchResults.length > 0 && nomPlayerId === null && (
+            <div style={styles.searchDropdown}>
+              {playerSearchResults.map((p, idx) => (
+                <div
+                  key={p.id}
+                  style={{
+                    ...styles.searchResultRow,
+                    background: idx === highlightIndex ? "rgba(224,179,74,0.16)" : undefined,
+                  }}
+                  onMouseEnter={() => setHighlightIndex(idx)}
+                  onClick={() => pickPlayer(p)}
+                >
+                  <PosPill pos={p.position} />
+                  <span style={{ flex: 1 }}>{p.name}</span>
+                  <span style={{ color: "#8b93a7", fontSize: 12 }}>Val {fmtMoney(p.auctionValue)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <select
+          ref={teamSelectRef}
+          value={nomTeamId ?? ""}
+          onChange={(e) => {
+            setNomTeamId(parseInt(e.target.value, 10));
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              bidInputRef.current?.focus();
+            }
+          }}
+          style={styles.nomSelect}
+        >
+          {teams.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name} ({fmtMoney(budgetRemaining(t.id))})
+            </option>
+          ))}
+        </select>
+
+        <input
+          ref={bidInputRef}
+          type="number"
+          placeholder="Winning bid $"
+          value={nomBid}
+          onChange={(e) => setNomBid(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              submitPick();
+            }
+          }}
+          style={{ ...styles.nomInput, maxWidth: 130, flex: "0 0 130px" }}
+        />
+
+        <button style={styles.primaryBtn} onClick={submitPick}>
+          Log pick
+        </button>
+      </div>
+      {selectedNomPlayer && (
+        <div style={{ fontSize: 13, color: "#8b93a7", marginTop: -8, marginBottom: 4 }}>
+          Nominating <b style={{ color: "#e7ebf3" }}>{selectedNomPlayer.name}</b> ·{" "}
+          suggested max bid {fmtMoney(selectedNomPlayer.maxBid)}
+        </div>
+      )}
+      {error && <div style={styles.errorBox}>{error}</div>}
+
+      <div style={{ marginBottom: 14 }}>
+        <button style={styles.ghostBtnSm} onClick={() => setShowAddPlayer((v) => !v)}>
+          {showAddPlayer ? "Cancel" : "+ Add player not in the list"}
+        </button>
+        {showAddPlayer && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+            <input
+              placeholder="Player name"
+              value={addName}
+              onChange={(e) => setAddName(e.target.value)}
+              style={{ ...styles.nomInput, flex: "1 1 220px" }}
+            />
+            <select value={addPos} onChange={(e) => setAddPos(e.target.value)} style={styles.nomSelect}>
+              {POSITIONS.map((pos) => (
+                <option key={pos} value={pos}>
+                  {pos}
+                </option>
+              ))}
+            </select>
+            <button
+              style={styles.primaryBtn}
+              onClick={() => {
+                onAddCustomPlayer(addName, addPos);
+                setAddName("");
+              }}
+            >
+              Add player
+            </button>
+          </div>
+        )}
+        {showAddPlayer && addPlayerMsg && (
+          <div style={{ fontSize: 12.5, color: "#8b93a7", marginTop: 6 }}>{addPlayerMsg}</div>
+        )}
+      </div>
+
+      {/* View switch */}
+      <div style={styles.viewSwitch}>
+        <button
+          style={view === "board" ? styles.tabActive : styles.tab}
+          onClick={() => setView("board")}
+        >
+          Player board
+        </button>
+        <button
+          style={view === "rosters" ? styles.tabActive : styles.tab}
+          onClick={() => setView("rosters")}
+        >
+          Team rosters
+        </button>
+        <button
+          style={view === "analysis" ? styles.tabActive : styles.tab}
+          onClick={() => setView("analysis")}
+        >
+          Draft analysis
+        </button>
+        <button
+          style={view === "board2" ? styles.tabActive : styles.tab}
+          onClick={() => setView("board2")}
+        >
+          Draft board
+        </button>
+        <button
+          style={view === "lessons" ? styles.tabActive : styles.tab}
+          onClick={() => setView("lessons")}
+        >
+          Lessons learned
+        </button>
+      </div>
+
+      {view === "board" ? (
+        <div className="board-layout" style={styles.boardLayout}>
+          <div style={{ minWidth: 0 }}>
+            <div style={styles.boardControls}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <FilterChip label="ALL" active={posFilter.size === 0} onClick={() => setPosFilter(new Set())} />
+                {POSITIONS.map((pos) => (
+                  <FilterChip
+                    key={pos}
+                    label={pos}
+                    color={POS_COLOR[pos]}
+                    active={posFilter.has(pos)}
+                    onClick={() => togglePosition(pos)}
+                  />
+                ))}
+                <FilterChip
+                  label="SUPERFLEX"
+                  color="#f4c95d"
+                  active={SUPERFLEX_ELIGIBLE.every((p) => posFilter.has(p))}
+                  onClick={() => toggleGroup(SUPERFLEX_ELIGIBLE)}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 8, flex: "1 1 260px" }}>
+                <input
+                  placeholder="Filter board…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  style={{ ...styles.nomInput, flex: 1 }}
+                />
+                <select value={sortKey} onChange={(e) => setSortKey(e.target.value)} style={styles.nomSelect}>
+                  {myTeamId !== null && <option value="personal">Sort: Best for my team</option>}
+                  <option value="auction">Sort: Auction value</option>
+                  <option value="vbd">Sort: VBD</option>
+                  <option value="name">Sort: Name</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={styles.tableWrap}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Player</th>
+                    <th style={styles.th}>Pos</th>
+                    <th style={styles.thNum}>Pts</th>
+                    <th style={styles.thNum}>Tier</th>
+                    <th style={styles.thNum}>VBD</th>
+                    <th style={styles.thNum}>{myTeamId !== null ? "Your Value" : "Value"}</th>
+                    <th style={styles.thNum}>{myTeamId !== null ? "Your Max" : "Max Bid"}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {boardPlayers.map((p) => (
+                    <tr
+                      key={p.id}
+                      style={{
+                        ...styles.tr,
+                        background: nomPlayerId === p.id ? "rgba(224,179,74,0.12)" : undefined,
+                      }}
+                      onClick={() => pickPlayer(p)}
+                    >
+                      <td style={styles.tdName}>
+                        {p.name}
+                        {myTeamId !== null && p.needMult >= 1.25 && <span style={styles.needTag}>NEED</span>}
+                        {myTeamId !== null && p.needMult === 1.1 && <span style={styles.flexTag}>FLEX</span>}
+                      </td>
+                      <td style={styles.td}>
+                        <PosPill pos={p.position} />
+                      </td>
+                      <td style={styles.tdNum}>{p.points.toFixed(1)}</td>
+                      <td style={styles.tdNum}>{p.tier.replace("Tier ", "T")}</td>
+                      <td style={styles.tdNum}>{p.vbd.toFixed(1)}</td>
+                      <td style={styles.tdNum}>{fmtMoney(myTeamId !== null ? p.personalValue : p.auctionValue)}</td>
+                      <td style={styles.tdNum}>{fmtMoney(myTeamId !== null ? p.personalMaxBid : p.maxBid)}</td>
+                    </tr>
+                  ))}
+                  {boardPlayers.length === 0 && (
+                    <tr>
+                      <td colSpan={7} style={{ padding: 24, textAlign: "center", color: "#7d8599" }}>
+                        No available players match that filter.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style={styles.sidebar}>
+            <div style={styles.panel}>
+              <div style={styles.panelTitle}>Team budgets</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {order.map((teamId) => {
+                  const t = teams.find((tt) => tt.id === teamId);
+                  const isUp = teamId === nominatorTeamId;
+                  return (
+                    <div
+                      key={teamId}
+                      style={{
+                        ...styles.teamRow,
+                        border: isUp ? "1px solid #e0b34a" : "1px solid transparent",
+                        background: isUp ? "rgba(224,179,74,0.08)" : "#161b26",
+                      }}
+                    >
+                      <span style={{ flex: 1, fontSize: 13, fontWeight: isUp ? 700 : 500 }}>{t?.name}</span>
+                      <span style={styles.mono}>{fmtMoney(budgetRemaining(teamId))}</span>
+                      <span style={{ fontSize: 11, color: "#7d8599", width: 40, textAlign: "right" }}>
+                        {countByTeam[teamId] || 0}/{ROSTER_SPOTS}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={styles.panel}>
+              <div style={styles.panelTitle}>Best available by position</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {POSITIONS.map((pos) => (
+                  <div key={pos}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                      <PosPill pos={pos} />
+                      {myTeamId !== null && needMultiplier(pos) >= 1.25 && <span style={styles.needTag}>NEED</span>}
+                      {myTeamId !== null && needMultiplier(pos) === 1.1 && <span style={styles.flexTag}>FLEX</span>}
+                    </div>
+                    {topByPosition[pos].map((p) => (
+                      <div
+                        key={p.id}
+                        style={styles.recRow}
+                        onClick={() => pickPlayer(p)}
+                        title="Click to nominate"
+                      >
+                        <span style={{ flex: 1 }}>{p.name}</span>
+                        <span style={styles.mono}>{fmtMoney(p.auctionValue)}</span>
+                      </div>
+                    ))}
+                    {topByPosition[pos].length === 0 && (
+                      <div style={{ fontSize: 12, color: "#5f6779" }}>All drafted</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : view === "rosters" ? (
+        <RostersView
+          teams={teams}
+          order={order}
+          keepers={keepers}
+          picks={picks}
+          players={players}
+          spentByTeam={spentByTeam}
+        />
+      ) : view === "analysis" ? (
+        <DraftAnalysisView teams={teams} order={order} keepers={keepers} picks={picks} players={players} />
+      ) : view === "board2" ? (
+        <DraftBoardView teams={teams} order={order} keepers={keepers} picks={picks} players={players} />
+      ) : (
+        <LessonsLearnedView
+          teams={teams}
+          order={order}
+          keepers={keepers}
+          picks={picks}
+          players={players}
+          myTeamId={myTeamId}
+        />
+      )}
+    </div>
+  );
+}
+
+function ClockStat({ label, value }) {
+  return (
+    <div style={{ textAlign: "right" }}>
+      <div style={{ fontSize: 10, color: "#7d8599", textTransform: "uppercase", letterSpacing: 0.5 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 17, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+    </div>
+  );
+}
+
+function PosPill({ pos, small }) {
+  const c = POS_COLOR[pos] || "#8b93a7";
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        flexShrink: 0,
+        fontSize: small ? 9.5 : 11,
+        fontWeight: 700,
+        padding: small ? "1px 4px" : "2px 7px",
+        borderRadius: 5,
+        color: "#0d0f14",
+        background: c,
+        letterSpacing: 0.3,
+      }}
+    >
+      {pos}
+    </span>
+  );
+}
+
+function FilterChip({ label, active, onClick, color }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "6px 12px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 600,
+        border: active ? `1px solid ${color || "#e0b34a"}` : "1px solid #2a3040",
+        background: active ? (color ? color + "22" : "rgba(224,179,74,0.12)") : "transparent",
+        color: active ? "#f0f2f6" : "#8b93a7",
+        cursor: "pointer",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function Ticker({ picks, players, teams, limit }) {
+  const items = [...picks].slice(-limit).reverse();
+  return (
+    <div style={styles.tickerOuter}>
+      <div style={styles.tickerWrap}>
+        {items.map((pk, i) => {
+          const p = players.find((pp) => pp.id === pk.playerId);
+          const t = teams.find((tt) => tt.id === pk.teamId);
+          return (
+            <span key={i} style={styles.tickerChip}>
+              <PosPill pos={p?.position} small />
+              <b style={{ margin: "0 6px" }}>{p?.name}</b>
+              <span style={{ color: "#7d8599" }}>→ {t?.name}</span>
+              <span style={styles.mono}> {fmtMoney(pk.cost)}</span>
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RostersView({ teams, order, keepers, picks, players, spentByTeam }) {
+  return (
+    <div style={styles.rosterGrid}>
+      {order.map((teamId) => {
+        const t = teams.find((tt) => tt.id === teamId);
+        const combined = [
+          ...keepers.filter((k) => k.teamId === teamId).map((k) => ({ ...k, isKeeper: true })),
+          ...picks.filter((p) => p.teamId === teamId).map((p) => ({ ...p, isKeeper: false })),
+        ];
+        const spent = spentByTeam[teamId] || 0;
+        const { slots, bench } = buildLineup(combined, players, ROSTER_REQUIREMENTS);
+        return (
+          <div key={teamId} style={styles.rosterCard}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{t?.name}</div>
+              <div style={{ fontSize: 12, color: "#7d8599" }}>
+                {combined.length}/{ROSTER_SPOTS} · {fmtMoney(BUDGET_PER_TEAM - spent)} left
+              </div>
+            </div>
+            {combined.length === 0 ? (
+              <div style={{ fontSize: 12, color: "#5f6779", padding: "8px 0" }}>No players yet</div>
+            ) : (
+              <>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {slots.map((sl, i) => {
+                    const pk = sl.entry;
+                    const p = pk ? players.find((pp) => pp.id === pk.playerId) : null;
+                    return (
+                      <div key={sl.label + i} style={styles.rosterRow}>
+                        <span style={styles.slotLabel}>{sl.label}</span>
+                        {p ? (
+                          <>
+                            <PosPill pos={p.position} />
+                            <span style={styles.rosterName}>
+                              {p.name}
+                              {pk.isKeeper && <span style={styles.keeperTag}>Kept</span>}
+                            </span>
+                            <span style={styles.mono}>{fmtMoney(pk.cost)}</span>
+                          </>
+                        ) : (
+                          <span style={{ ...styles.rosterName, color: "#5f6779" }}>Empty</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {bench.length > 0 && (
+                  <>
+                    <div style={styles.benchDivider}>BENCH</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {bench.map((pk) => {
+                        const p = pk.player;
+                        return (
+                          <div key={pk.playerId} style={styles.rosterRow}>
+                            <PosPill pos={p.position} />
+                            <span style={styles.rosterName}>
+                              {p.name}
+                              {pk.isKeeper && <span style={styles.keeperTag}>Kept</span>}
+                            </span>
+                            <span style={styles.mono}>{fmtMoney(pk.cost)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function DraftAnalysisView({ teams, order, keepers, picks, players }) {
+  const [sortCol, setSortCol] = useState("starterRank");
+  const [sortDir, setSortDir] = useState("asc");
+
+  const rows = useMemo(() => {
+    return order.map((teamId) => {
+      const t = teams.find((tt) => tt.id === teamId);
+      const combined = [
+        ...keepers.filter((k) => k.teamId === teamId),
+        ...picks.filter((p) => p.teamId === teamId),
+      ];
+      const playerCount = combined.length;
+      let projPoints = 0;
+      let auctionValue = 0;
+      combined.forEach((pk) => {
+        const p = players.find((pp) => pp.id === pk.playerId);
+        if (p) {
+          projPoints += p.points;
+          auctionValue += p.auctionValue;
+        }
+      });
+      const { starterPoints } = buildLineup(combined, players, ROSTER_REQUIREMENTS);
+      const actualCost = combined.reduce((s, pk) => s + pk.cost, 0);
+      const draftValue = auctionValue - actualCost;
+      const powerScore = projPoints * 0.8 + draftValue * 0.2;
+      const budgetEff = actualCost === 0 ? 0 : auctionValue / actualCost;
+      const avgCost = playerCount === 0 ? 0 : actualCost / playerCount;
+      const avgProj = playerCount === 0 ? 0 : projPoints / playerCount;
+      return {
+        teamId,
+        name: t?.name,
+        playerCount,
+        projPoints,
+        starterPoints,
+        auctionValue,
+        actualCost,
+        draftValue,
+        powerScore,
+        budgetEff,
+        avgCost,
+        avgProj,
+      };
+    });
+  }, [teams, order, keepers, picks, players]);
+
+  const hasAny = rows.some((r) => r.playerCount > 0);
+
+  if (!hasAny) {
+    return (
+      <div style={{ color: "#7d8599", padding: "24px 4px", fontSize: 13 }}>
+        No keepers or picks logged yet — analysis fills in as the draft happens.
+      </div>
+    );
+  }
+
+  const pointsRankMap = {};
+  [...rows].sort((a, b) => b.projPoints - a.projPoints).forEach((r, i) => (pointsRankMap[r.teamId] = i + 1));
+
+  const starterRankMap = {};
+  [...rows]
+    .sort((a, b) => b.starterPoints - a.starterPoints)
+    .forEach((r, i) => (starterRankMap[r.teamId] = i + 1));
+
+  const powerRankMap = {};
+  [...rows].sort((a, b) => b.powerScore - a.powerScore).forEach((r, i) => (powerRankMap[r.teamId] = i + 1));
+
+  const withRanks = rows.map((r) => ({
+    ...r,
+    pointsRank: pointsRankMap[r.teamId],
+    starterRank: starterRankMap[r.teamId],
+    powerRank: powerRankMap[r.teamId],
+  }));
+
+  const columns = [
+    { key: "name", label: "Team", tip: "The team this row summarizes." },
+    { key: "playerCount", label: "Players", tip: "Total players drafted or kept so far." },
+    {
+      key: "starterPoints",
+      label: "Starter Pts",
+      fmt: (v) => v.toFixed(1),
+      tip: "Total projected points from only the players in this team's starting lineup — bench production is excluded.",
+    },
+    {
+      key: "starterRank",
+      label: "Starter Rank",
+      fmt: (v) => "#" + v,
+      tip: "Rank among all teams by Starter Pts — the best gauge of who's actually built the strongest active roster.",
+    },
+    {
+      key: "projPoints",
+      label: "Proj Pts",
+      fmt: (v) => v.toFixed(1),
+      tip: "Total projected points across every drafted/kept player, starters and bench combined.",
+    },
+    {
+      key: "pointsRank",
+      label: "Pts Rank",
+      fmt: (v) => "#" + v,
+      tip: "Rank among all teams by total Proj Pts (starters + bench).",
+    },
+    {
+      key: "auctionValue",
+      label: "Auction Val",
+      fmt: fmtMoney,
+      tip: "The modeled pre-draft dollar value of every player this team owns, summed — what the model thought they were worth.",
+    },
+    {
+      key: "actualCost",
+      label: "Actual Cost",
+      fmt: fmtMoney,
+      tip: "What this team actually paid in total, across keepers and live picks.",
+    },
+    {
+      key: "draftValue",
+      label: "Draft Value",
+      fmt: fmtMoney,
+      signed: true,
+      tip: "Auction Val minus Actual Cost — positive means this team found bargains overall, negative means they paid a premium overall.",
+    },
+    {
+      key: "powerRank",
+      label: "Power Rank",
+      fmt: (v) => "#" + v,
+      tip: "Rank blending total projected points (80%) with Draft Value (20%) — rewards strong rosters built efficiently.",
+    },
+    {
+      key: "budgetEff",
+      label: "Budget Eff.",
+      fmt: (v) => v.toFixed(2) + "x",
+      tip: "Auction Val divided by Actual Cost — above 1x means this team got more modeled value than they paid for, on average.",
+    },
+    {
+      key: "avgCost",
+      label: "Avg $/Plyr",
+      fmt: fmtMoney,
+      tip: "Actual Cost divided by number of players — average price paid per roster spot.",
+    },
+    {
+      key: "avgProj",
+      label: "Avg Pts/Plyr",
+      fmt: (v) => v.toFixed(1),
+      tip: "Proj Pts divided by number of players — a quick read on average roster quality regardless of roster size.",
+    },
+  ];
+
+  const rankLikeAsc = new Set(["name", "starterRank", "pointsRank", "powerRank"]);
+
+  const handleSort = (key) => {
+    if (sortCol === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortCol(key);
+      setSortDir(rankLikeAsc.has(key) ? "asc" : "desc");
+    }
+  };
+
+  const sortedRows = [...withRanks].sort((a, b) => {
+    const av = a[sortCol];
+    const bv = b[sortCol];
+    if (typeof av === "string") {
+      return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+    }
+    return sortDir === "asc" ? av - bv : bv - av;
+  });
+
+  return (
+    <div>
+      <p style={{ color: "#7d8599", fontSize: 13, marginTop: -4, marginBottom: 10 }}>
+        Starter Pts counts only the players in each team's starting lineup (see Team
+        Rosters) — bench production is excluded. Power Rank blends total projected
+        points (80%) with draft value — auction value minus what was actually paid
+        (20%) — the same formula as the workbook's Post_Draft_Analysis sheet. Click
+        any column to sort.
+      </p>
+      <div style={styles.tableWrap}>
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              {columns.map((c) => (
+                <th
+                  key={c.key}
+                  style={{ ...(c.key === "name" ? styles.th : styles.thNum), cursor: "pointer", userSelect: "none" }}
+                  onClick={() => handleSort(c.key)}
+                  title={c.tip}
+                >
+                  {c.label}
+                  {sortCol === c.key ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedRows.map((r) => (
+              <tr key={r.teamId} style={{ ...styles.tr, cursor: "default" }}>
+                {columns.map((c) => {
+                  const raw = r[c.key];
+                  const display = c.fmt ? c.fmt(raw) : raw;
+                  const color = c.signed ? (raw >= 0 ? "#5fd685" : "#e46a5c") : undefined;
+                  return (
+                    <td key={c.key} style={c.key === "name" ? styles.tdName : { ...styles.tdNum, color }}>
+                      {c.signed && raw >= 0 ? "+" : ""}
+                      {display}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function DraftBoardView({ teams, order, keepers, picks, players }) {
+  const sortedPicks = useMemo(() => [...picks].sort((a, b) => a.pickNum - b.pickNum), [picks]);
+
+  if (keepers.length === 0 && picks.length === 0) {
+    return (
+      <div style={{ color: "#7d8599", padding: "24px 4px", fontSize: 13 }}>
+        No keepers or picks logged yet — the board fills in as the draft happens.
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p style={{ color: "#7d8599", fontSize: 13, marginTop: -4, marginBottom: 10 }}>
+        Every live nomination, in the order it happened, with who won it and for how
+        much. Kept players were never nominated, so they're listed separately below.
+      </p>
+      <div style={styles.boardTableWrap}>
+        <table style={{ ...styles.table, ...styles.boardTable }}>
+          <thead>
+            <tr>
+              <th style={{ ...styles.boardTh, width: 48 }}>Pick</th>
+              <th style={styles.boardTh}>Player</th>
+              <th style={{ ...styles.boardTh, width: 56 }}>Pos</th>
+              <th style={styles.boardTh}>Winning Team</th>
+              <th style={{ ...styles.boardTh, width: 80 }}>Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedPicks.map((pk) => {
+              const p = players.find((pp) => pp.id === pk.playerId);
+              const t = teams.find((tt) => tt.id === pk.teamId);
+              return (
+                <tr key={pk.pickNum}>
+                  <td style={{ ...styles.boardTd, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                    {pk.pickNum}
+                  </td>
+                  <td style={styles.boardTd} title={p?.name}>
+                    {p?.name}
+                  </td>
+                  <td style={styles.boardTd}>
+                    <PosPill pos={p?.position} small />
+                  </td>
+                  <td style={styles.boardTd}>{t?.name}</td>
+                  <td style={{ ...styles.boardTd, fontVariantNumeric: "tabular-nums" }}>{fmtMoney(pk.cost)}</td>
+                </tr>
+              );
+            })}
+            {sortedPicks.length === 0 && (
+              <tr>
+                <td colSpan={5} style={{ ...styles.boardTd, textAlign: "center", color: "#5f6779" }}>
+                  No live nominations logged yet.
+                </td>
+              </tr>
+            )}
+            {keepers.length > 0 && (
+              <tr>
+                <td
+                  colSpan={5}
+                  style={{
+                    ...styles.boardTd,
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    letterSpacing: 0.8,
+                    color: "#5f6779",
+                    background: "#12151d",
+                  }}
+                >
+                  KEEPERS
+                </td>
+              </tr>
+            )}
+            {keepers.map((k, i) => {
+              const p = players.find((pp) => pp.id === k.playerId);
+              const t = teams.find((tt) => tt.id === k.teamId);
+              return (
+                <tr key={"keeper" + i}>
+                  <td style={styles.boardTd}>
+                    <span style={styles.keeperTag}>Kept</span>
+                  </td>
+                  <td style={styles.boardTd} title={p?.name}>
+                    {p?.name}
+                  </td>
+                  <td style={styles.boardTd}>
+                    <PosPill pos={p?.position} small />
+                  </td>
+                  <td style={styles.boardTd}>{t?.name}</td>
+                  <td style={{ ...styles.boardTd, fontVariantNumeric: "tabular-nums" }}>{fmtMoney(k.cost)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function LessonsLearnedView({ teams, order, keepers, picks, players, myTeamId }) {
+  const rows = useMemo(() => {
+    return order.map((teamId) => {
+      const t = teams.find((tt) => tt.id === teamId);
+      const combined = [
+        ...keepers.filter((k) => k.teamId === teamId),
+        ...picks.filter((p) => p.teamId === teamId),
+      ];
+      const { starterPoints } = buildLineup(combined, players, ROSTER_REQUIREMENTS);
+      let auctionValue = 0;
+      let actualCost = 0;
+      combined.forEach((pk) => {
+        const p = players.find((pp) => pp.id === pk.playerId);
+        if (p) auctionValue += p.auctionValue;
+        actualCost += pk.cost;
+      });
+      return {
+        teamId,
+        name: t?.name,
+        starterPoints,
+        playerCount: combined.length,
+        draftValue: auctionValue - actualCost,
+      };
+    });
+  }, [teams, order, keepers, picks, players]);
+
+  if (keepers.length === 0 && picks.length === 0) {
+    return (
+      <div style={{ color: "#7d8599", padding: "24px 4px", fontSize: 13 }}>
+        Lessons and trends will fill in once the draft happens.
+      </div>
+    );
+  }
+
+  const starterRankMap = {};
+  [...rows].sort((a, b) => b.starterPoints - a.starterPoints).forEach((r, i) => (starterRankMap[r.teamId] = i + 1));
+  const valueRankMap = {};
+  [...rows].sort((a, b) => b.draftValue - a.draftValue).forEach((r, i) => (valueRankMap[r.teamId] = i + 1));
+
+  const myRow = myTeamId !== null ? rows.find((r) => r.teamId === myTeamId) : null;
+  const myStarterRank = myRow ? starterRankMap[myRow.teamId] : null;
+  const myValueRank = myRow ? valueRankMap[myRow.teamId] : null;
+
+  const posTrend = {};
+  [...keepers, ...picks].forEach((pk) => {
+    const p = players.find((pp) => pp.id === pk.playerId);
+    if (!p) return;
+    if (!posTrend[p.position]) posTrend[p.position] = { sum: 0, count: 0 };
+    posTrend[p.position].sum += pk.cost;
+    posTrend[p.position].count += 1;
+  });
+  const posTrendSorted = Object.entries(posTrend)
+    .map(([pos, d]) => ({ pos, avgCost: d.sum / d.count, count: d.count }))
+    .sort((a, b) => b.avgCost - a.avgCost);
+
+  let myPosBreakdown = null;
+  if (myRow) {
+    const leaguePos = {};
+    const myPos = {};
+    order.forEach((tid) => {
+      [...keepers.filter((k) => k.teamId === tid), ...picks.filter((p) => p.teamId === tid)].forEach((pk) => {
+        const p = players.find((pp) => pp.id === pk.playerId);
+        if (!p) return;
+        leaguePos[p.position] = (leaguePos[p.position] || 0) + pk.cost;
+        if (tid === myTeamId) myPos[p.position] = (myPos[p.position] || 0) + pk.cost;
+      });
+    });
+    myPosBreakdown = POSITIONS.map((pos) => {
+      const leagueAvgPerTeam = (leaguePos[pos] || 0) / order.length;
+      const mine = myPos[pos] || 0;
+      return { pos, mine, leagueAvgPerTeam, diff: mine - leagueAvgPerTeam };
+    });
+  }
+
+  const tips = [];
+  if (myRow) {
+    const third = Math.ceil(order.length / 3);
+    if (myStarterRank <= third) {
+      tips.push(
+        `Your starting lineup ranked #${myStarterRank} of ${order.length} — one of the strongest rosters in the league. Whatever approach got you here is worth repeating.`
+      );
+    } else if (myStarterRank > order.length - third) {
+      tips.push(
+        `Your starting lineup ranked #${myStarterRank} of ${order.length} — near the bottom of the league. The position breakdown below points at where you fell behind.`
+      );
+    } else {
+      tips.push(`Your starting lineup ranked #${myStarterRank} of ${order.length} — solidly middle of the pack.`);
+    }
+    tips.push(
+      `Your Draft Value was ${fmtMoney(myRow.draftValue)} ${
+        myRow.draftValue >= 0 ? "in bargains found" : "spent above modeled value"
+      } — ranked #${myValueRank} of ${order.length} in the league for value found relative to what was paid.`
+    );
+    if (myPosBreakdown) {
+      const sorted = [...myPosBreakdown].sort((a, b) => a.diff - b.diff);
+      const under = sorted[0];
+      const over = sorted[sorted.length - 1];
+      if (under && under.diff < -10) {
+        tips.push(
+          `${under.pos} was where you spent the least relative to the rest of the league — worth budgeting more there next year if that position came up short.`
+        );
+      }
+      if (over && over.diff > 10) {
+        tips.push(
+          `${over.pos} is where you invested the most relative to the league — make sure that spending actually paid off in points, not just name value.`
+        );
+      }
+    }
+  } else {
+    tips.push(`Pick "My team" on the Draft screen next time to get a personalized breakdown here.`);
+  }
+  if (posTrendSorted.length > 0) {
+    const priciest = posTrendSorted[0];
+    const cheapest = posTrendSorted[posTrendSorted.length - 1];
+    tips.push(
+      `${priciest.pos} commanded the highest average price this draft (${fmtMoney(
+        priciest.avgCost
+      )}) — budget for a premium there next year.`
+    );
+    tips.push(
+      `${cheapest.pos} went for the least on average (${fmtMoney(
+        cheapest.avgCost
+      )}) — a reasonable position to wait on if money's tight elsewhere.`
+    );
+  }
+  tips.push(
+    `This draft's actual keeper and auction prices have already been folded into next year's calibrated values and Max Bids — no separate action needed there.`
+  );
+
+  return (
+    <div>
+      {myRow && (
+        <div style={{ ...styles.panel, marginBottom: 16 }}>
+          <div style={styles.panelTitle}>Your draft, in short</div>
+          <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+            <ClockStat label="Starter Rank" value={`#${myStarterRank} / ${order.length}`} />
+            <ClockStat label="Draft Value" value={fmtMoney(myRow.draftValue)} />
+            <ClockStat label="Players" value={myRow.playerCount} />
+          </div>
+        </div>
+      )}
+
+      <div style={{ ...styles.panel, marginBottom: 16 }}>
+        <div style={styles.panelTitle}>Positional spending trends this draft</div>
+        <p style={{ color: "#7d8599", fontSize: 12.5, marginTop: -4, marginBottom: 8 }}>
+          Average price paid by position, across every team this draft (keepers and live picks).
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {posTrendSorted.map((pt) => (
+            <div key={pt.pos} style={styles.recRow}>
+              <PosPill pos={pt.pos} />
+              <span style={{ flex: 1, marginLeft: 8 }}>{pt.pos}</span>
+              <span style={styles.mono}>avg {fmtMoney(pt.avgCost)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {myPosBreakdown && (
+        <div style={{ ...styles.panel, marginBottom: 16 }}>
+          <div style={styles.panelTitle}>Your position spending vs. league average</div>
+          <div style={styles.tableWrap}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>Pos</th>
+                  <th style={styles.thNum} title="Total amount you spent (keepers + picks) at this position">
+                    Your Spend
+                  </th>
+                  <th style={styles.thNum} title="Average total spend at this position, across all teams">
+                    League Avg/Team
+                  </th>
+                  <th style={styles.thNum} title="Yours minus the league average — positive means you spent more here than most">
+                    Difference
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {myPosBreakdown.map((r) => (
+                  <tr key={r.pos} style={{ ...styles.tr, cursor: "default" }}>
+                    <td style={styles.td}>
+                      <PosPill pos={r.pos} />
+                    </td>
+                    <td style={styles.tdNum}>{fmtMoney(r.mine)}</td>
+                    <td style={styles.tdNum}>{fmtMoney(r.leagueAvgPerTeam)}</td>
+                    <td style={{ ...styles.tdNum, color: r.diff >= 0 ? "#5fd685" : "#e46a5c" }}>
+                      {r.diff >= 0 ? "+" : ""}
+                      {fmtMoney(r.diff)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <div style={styles.panel}>
+        <div style={styles.panelTitle}>Tips for next year</div>
+        <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 8 }}>
+          {tips.map((tip, i) => (
+            <li key={i} style={{ fontSize: 13.5, color: "#c7cede", lineHeight: 1.5 }}>
+              {tip}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   Styles
+---------------------------------------------------------- */
+const styles = {
+  app: {
+    minHeight: "100%",
+    background: "#0d0f14",
+    color: "#e7ebf3",
+    fontFamily:
+      '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif',
+    padding: "0 0 40px",
+  },
+  loadingScreen: {
+    minHeight: 300,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#0d0f14",
+    color: "#e7ebf3",
+  },
+  loadingSpinner: {
+    width: 28,
+    height: 28,
+    borderRadius: "50%",
+    border: "3px solid #2a3040",
+    borderTopColor: "#e0b34a",
+    animation: "spin 0.8s linear infinite",
+  },
+  eyebrow: {
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: 1.4,
+    color: "#e0b34a",
+    marginBottom: 10,
+  },
+  eyebrowSmall: {
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: 1.2,
+    color: "#e0b34a",
+  },
+  h1: {
+    fontSize: 28,
+    fontWeight: 800,
+    margin: "0 0 10px",
+    letterSpacing: -0.5,
+  },
+  setupWrap: { maxWidth: 1200, margin: "0 auto", padding: "32px 24px" },
+  setupHeader: { marginBottom: 24 },
+  setupGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 16,
+  },
+  panel: {
+    background: "#141821",
+    border: "1px solid #232a38",
+    borderRadius: 12,
+    padding: 16,
+  },
+  panelTitle: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#c7cede",
+    marginBottom: 10,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  teamNameInput: {
+    background: "#0d0f14",
+    border: "1px solid #2a3040",
+    borderRadius: 8,
+    padding: "8px 10px",
+    color: "#e7ebf3",
+    fontSize: 14,
+  },
+  teamNameInputInline: {
+    flex: "0 0 auto",
+    background: "transparent",
+    border: "1px solid transparent",
+    borderRadius: 6,
+    padding: "6px 8px",
+    color: "#e7ebf3",
+    fontSize: 14,
+  },
+  dragHandle: {
+    cursor: "grab",
+    color: "#5f6779",
+    fontSize: 15,
+    lineHeight: 1,
+    padding: "0 2px",
+    userSelect: "none",
+  },
+  orderRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    background: "#0d0f14",
+    border: "1px solid #232a38",
+    borderRadius: 8,
+    padding: "6px 8px",
+    cursor: "grab",
+  },
+  orderNum: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    background: "#232a38",
+    color: "#c7cede",
+    fontSize: 11,
+    fontWeight: 700,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  orderArrow: {
+    background: "transparent",
+    border: "1px solid #2a3040",
+    borderRadius: 5,
+    color: "#c7cede",
+    width: 24,
+    height: 24,
+    cursor: "pointer",
+    fontSize: 12,
+  },
+  primaryBtn: {
+    background: "#e0b34a",
+    color: "#14100a",
+    border: "none",
+    borderRadius: 9,
+    padding: "10px 20px",
+    fontWeight: 700,
+    fontSize: 14,
+    cursor: "pointer",
+  },
+  ghostBtnSm: {
+    background: "transparent",
+    color: "#c7cede",
+    border: "1px solid #2a3040",
+    borderRadius: 8,
+    padding: "7px 12px",
+    fontWeight: 600,
+    fontSize: 12.5,
+    cursor: "pointer",
+  },
+  dangerGhostBtn: {
+    background: "transparent",
+    color: "#e46a5c",
+    border: "1px solid #4a2c2c",
+    borderRadius: 9,
+    padding: "10px 16px",
+    fontWeight: 600,
+    fontSize: 13,
+    cursor: "pointer",
+  },
+  dangerGhostBtnSm: {
+    background: "transparent",
+    color: "#e46a5c",
+    border: "1px solid #4a2c2c",
+    borderRadius: 8,
+    padding: "7px 12px",
+    fontWeight: 600,
+    fontSize: 12.5,
+    cursor: "pointer",
+  },
+  draftWrap: { maxWidth: 1800, margin: "0 auto", padding: "20px 24px 0" },
+  topBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 14,
+  },
+  myTeamBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+    background: "#141821",
+    border: "1px solid #232a38",
+    borderRadius: 10,
+    padding: "9px 12px",
+    marginBottom: 14,
+  },
+  needTag: {
+    fontSize: 9,
+    fontWeight: 800,
+    color: "#0d0f14",
+    background: "#e46a5c",
+    borderRadius: 4,
+    padding: "1px 5px",
+    marginLeft: 7,
+    letterSpacing: 0.4,
+  },
+  flexTag: {
+    fontSize: 9,
+    fontWeight: 800,
+    color: "#0d0f14",
+    background: "#f4c95d",
+    borderRadius: 4,
+    padding: "1px 5px",
+    marginLeft: 7,
+    letterSpacing: 0.4,
+  },
+  clockBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    background: "linear-gradient(135deg, #191d27, #14171f)",
+    border: "1px solid #2a3040",
+    borderRadius: 14,
+    padding: "14px 18px",
+    marginBottom: 14,
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  clockStats: { display: "flex", gap: 22 },
+  tickerOuter: {
+    border: "1px solid #232a38",
+    borderRadius: 10,
+    background: "#12151d",
+    marginBottom: 14,
+    padding: "8px 10px",
+  },
+  tickerWrap: { display: "flex", flexWrap: "wrap", gap: 8 },
+  tickerChip: {
+    display: "inline-flex",
+    alignItems: "center",
+    fontSize: 12.5,
+    padding: "4px 8px",
+    background: "#181d28",
+    border: "1px solid #232a38",
+    borderRadius: 999,
+  },
+  nomPanel: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    background: "#141821",
+    border: "1px solid #232a38",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 6,
+  },
+  nomInput: {
+    background: "#0d0f14",
+    border: "1px solid #2a3040",
+    borderRadius: 8,
+    padding: "9px 11px",
+    color: "#e7ebf3",
+    fontSize: 14,
+    minWidth: 0,
+  },
+  nomSelect: {
+    background: "#0d0f14",
+    border: "1px solid #2a3040",
+    borderRadius: 8,
+    padding: "9px 8px",
+    color: "#e7ebf3",
+    fontSize: 13,
+  },
+  searchDropdown: {
+    position: "absolute",
+    top: "calc(100% + 4px)",
+    left: 0,
+    right: 0,
+    background: "#181d28",
+    border: "1px solid #2a3040",
+    borderRadius: 10,
+    overflow: "hidden",
+    zIndex: 20,
+    boxShadow: "0 12px 24px rgba(0,0,0,0.4)",
+  },
+  searchResultRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "8px 10px",
+    fontSize: 13,
+    cursor: "pointer",
+    borderBottom: "1px solid #232a38",
+  },
+  errorBox: {
+    background: "rgba(228,106,92,0.1)",
+    border: "1px solid #4a2c2c",
+    color: "#f3a89e",
+    borderRadius: 9,
+    padding: "9px 12px",
+    fontSize: 13,
+    marginBottom: 14,
+  },
+  viewSwitch: { display: "flex", gap: 6, marginBottom: 12, marginTop: 10 },
+  tab: {
+    background: "transparent",
+    border: "1px solid #2a3040",
+    color: "#8b93a7",
+    borderRadius: 8,
+    padding: "7px 14px",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  tabActive: {
+    background: "rgba(224,179,74,0.12)",
+    border: "1px solid #e0b34a",
+    color: "#f0f2f6",
+    borderRadius: 8,
+    padding: "7px 14px",
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  boardLayout: {
+    display: "grid",
+    gridTemplateColumns: "1fr 280px",
+    gap: 16,
+    alignItems: "start",
+  },
+  boardControls: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+    marginBottom: 10,
+  },
+  tableWrap: {
+    border: "1px solid #232a38",
+    borderRadius: 12,
+    overflow: "hidden",
+    maxHeight: 560,
+    overflowY: "auto",
+  },
+  boardTableWrap: {
+    border: "1px solid #232a38",
+    borderRadius: 12,
+    overflowX: "auto",
+  },
+  boardTable: { width: "100%", tableLayout: "fixed" },
+  boardTh: {
+    textAlign: "left",
+    padding: "6px 6px",
+    background: "#161b26",
+    color: "#8b93a7",
+    fontSize: 10.5,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+    position: "sticky",
+    top: 0,
+    border: "1px solid #232a38",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    zIndex: 1,
+  },
+  boardTd: {
+    padding: "4px 6px",
+    border: "1px solid #1c2230",
+    fontSize: 11,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
+  th: {
+    textAlign: "left",
+    padding: "9px 10px",
+    background: "#161b26",
+    color: "#8b93a7",
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    position: "sticky",
+    top: 0,
+  },
+  thNum: {
+    textAlign: "right",
+    padding: "9px 10px",
+    background: "#161b26",
+    color: "#8b93a7",
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    position: "sticky",
+    top: 0,
+  },
+  tr: { borderTop: "1px solid #1c2230", cursor: "pointer" },
+  td: { padding: "8px 10px" },
+  tdName: { padding: "8px 10px", fontWeight: 500 },
+  tdNum: {
+    padding: "8px 10px",
+    textAlign: "right",
+    fontVariantNumeric: "tabular-nums",
+    color: "#c7cede",
+  },
+  sidebar: { display: "flex", flexDirection: "column", gap: 12 },
+  utilityBar: {
+    maxWidth: 1800,
+    margin: "0 auto",
+    padding: "12px 16px 0",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  keeperRow: {
+    display: "flex",
+    alignItems: "center",
+    background: "#0d0f14",
+    border: "1px solid #232a38",
+    borderRadius: 8,
+    padding: "6px 9px",
+  },
+  keeperTag: {
+    fontSize: 9,
+    fontWeight: 800,
+    color: "#0d0f14",
+    background: "#e0b34a",
+    borderRadius: 4,
+    padding: "1px 5px",
+    marginLeft: 7,
+    letterSpacing: 0.4,
+  },
+  removeBtn: {
+    background: "transparent",
+    border: "none",
+    color: "#e46a5c",
+    fontSize: 16,
+    lineHeight: 1,
+    cursor: "pointer",
+    marginLeft: 10,
+    padding: "0 2px",
+  },
+  keepPromoteBtn: {
+    background: "transparent",
+    border: "1px solid #5fd685",
+    color: "#5fd685",
+    borderRadius: 6,
+    padding: "3px 10px",
+    fontSize: 11.5,
+    fontWeight: 700,
+    cursor: "pointer",
+    marginLeft: 10,
+  },
+  teamRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    padding: "6px 9px",
+  },
+  mono: { fontVariantNumeric: "tabular-nums", fontSize: 13, fontWeight: 600 },
+  recRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    fontSize: 12.5,
+    padding: "3px 2px",
+    cursor: "pointer",
+    color: "#c7cede",
+  },
+  rosterGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
+    gap: 12,
+  },
+  rosterCard: {
+    background: "#141821",
+    border: "1px solid #232a38",
+    borderRadius: 12,
+    padding: 14,
+  },
+  rosterRow: { display: "flex", alignItems: "center", padding: "3px 0" },
+  slotLabel: {
+    width: 42,
+    flexShrink: 0,
+    fontSize: 10.5,
+    fontWeight: 700,
+    color: "#7d8599",
+    letterSpacing: 0.3,
+  },
+  rosterName: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 13,
+    minWidth: 0,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  benchDivider: {
+    fontSize: 10.5,
+    fontWeight: 700,
+    color: "#5f6779",
+    letterSpacing: 0.8,
+    margin: "10px 0 6px",
+    borderTop: "1px solid #232a38",
+    paddingTop: 8,
+  },
+};
+
+
+const rootEl = document.getElementById("root");
+const root = ReactDOM.createRoot(rootEl);
+root.render(<App />);
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "name": "Lone Rangers Draft Tool",
+  "short_name": "Lone Rangers",
+  "id": "/fantasy-draft-tools/lone-rangers.html",
+  "start_url": "lone-rangers.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d0f14",
+  "theme_color": "#0d0f14",
+  "icons": [
+    {
+      "src": "icons/lone-rangers-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/lone-rangers-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/lone-rangers-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
