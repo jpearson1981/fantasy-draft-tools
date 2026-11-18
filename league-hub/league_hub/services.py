@@ -2,17 +2,22 @@ from __future__ import annotations
 
 import json
 import time
+from datetime import datetime, timezone
 
 from .yahoo.client import YahooAuthError
 from .yahoo.parse import parse_league_settings, parse_teams
 
 
+def _now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def upsert_user(db, guid: str) -> int:
-    with db:
+    with db.transaction():
         row = db.execute(
-            "INSERT INTO users (yahoo_guid) VALUES (?) "
+            "INSERT INTO users (yahoo_guid, created_at) VALUES (?, ?) "
             "ON CONFLICT(yahoo_guid) DO UPDATE SET yahoo_guid = excluded.yahoo_guid RETURNING id",
-            (guid,),
+            (guid, _now()),
         ).fetchone()
     return row["id"]
 
@@ -25,7 +30,7 @@ def store_tokens(db, cipher, user_id: int, token_body: dict) -> None:
         fields.append("refresh_token_enc = ?")
         values.append(cipher.encrypt(token_body["refresh_token"]))
     values.append(user_id)
-    with db:
+    with db.transaction():
         db.execute(f"UPDATE users SET {', '.join(fields)} WHERE id = ?", values)
 
 
@@ -54,13 +59,13 @@ def import_yahoo_league(db, user_id: int, client, access_token: str, league_key:
     norm = parse_league_settings(settings_payload)
     teams = parse_teams(teams_payload)
 
-    with db:
+    with db.transaction():
         league_id = db.execute(
             """
             INSERT INTO leagues (user_id, platform, external_key, external_league_id, season, name,
                 num_teams, scoring_type, draft_type, draft_mode, draft_status, roster_json,
                 scoring_json, auction_budget, renew_key, settings_raw, imported_at)
-            VALUES (?, 'yahoo', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            VALUES (?, 'yahoo', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id, platform, external_key) DO UPDATE SET
                 external_league_id = excluded.external_league_id,
                 season = excluded.season, name = excluded.name, num_teams = excluded.num_teams,
@@ -69,7 +74,7 @@ def import_yahoo_league(db, user_id: int, client, access_token: str, league_key:
                 roster_json = excluded.roster_json, scoring_json = excluded.scoring_json,
                 auction_budget = COALESCE(excluded.auction_budget, leagues.auction_budget),
                 renew_key = excluded.renew_key, settings_raw = excluded.settings_raw,
-                imported_at = CURRENT_TIMESTAMP
+                imported_at = excluded.imported_at
             RETURNING id
             """,
             (
@@ -78,7 +83,7 @@ def import_yahoo_league(db, user_id: int, client, access_token: str, league_key:
                 norm["draft_status"], json.dumps({**norm["roster"], "_spots": norm["roster_spots"],
                                                  "_starters": norm["starters"]}),
                 json.dumps(norm["scoring"]), norm["auction_budget"], norm["renew_key"],
-                json.dumps({"settings": settings_payload, "teams": teams_payload}),
+                json.dumps({"settings": settings_payload, "teams": teams_payload}), _now(),
             ),
         ).fetchone()["id"]
 

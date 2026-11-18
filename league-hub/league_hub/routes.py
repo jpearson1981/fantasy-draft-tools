@@ -180,7 +180,7 @@ def update_league(league_id: int):
         sets.append("name = ?")
         values.append(name)
     if sets:
-        with db:
+        with db.transaction():
             db.execute(f"UPDATE leagues SET {', '.join(sets)} WHERE id = ?", [*values, league_id])
     row = _own_league(db, league_id)
     return jsonify(services.league_to_dict(db, row, include_teams=True))
@@ -192,6 +192,6 @@ def delete_league(league_id: int):
     db = get_db()
     if _own_league(db, league_id) is None:
         return jsonify(error="not_found"), 404
-    with db:
+    with db.transaction():
         db.execute("DELETE FROM leagues WHERE id = ?", (league_id,))
     return jsonify(ok=True)

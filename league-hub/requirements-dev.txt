@@ -1,2 +1,5 @@
--r requirements.txt
+Flask>=3.0,<4
+requests>=2.31
+cryptography>=42
 pytest>=8
+# psycopg[binary]>=3.1   # only needed if you point DATABASE_URL at PostgreSQL
